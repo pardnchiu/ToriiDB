@@ -8,14 +8,14 @@ import (
 )
 
 func (s *Store) addToAOF(cmd, key, value string) error {
-	rec := AOFRecord{
+	record := AOFRecord{
 		Timestamp: time.Now().Unix(),
 		Command:   cmd,
 		Key:       key,
 		Value:     value,
 	}
 
-	raw, err := json.Marshal(rec)
+	raw, err := json.Marshal(record)
 	if err != nil {
 		return err
 	}
@@ -55,6 +55,7 @@ func replayAOF(path string) (map[string]*Entry, error) {
 			data[record.Key] = &Entry{
 				Key:       record.Key,
 				Value:     record.Value,
+				Type:      detectType(record.Value),
 				CreatedAt: record.Timestamp,
 			}
 

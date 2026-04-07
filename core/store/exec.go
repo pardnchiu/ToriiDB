@@ -23,6 +23,18 @@ func (s *Store) Exec(input string) string {
 		}
 		return "(nil)"
 
+	case "EXIST":
+		if len(parts) != 2 {
+			return "usage: EXIST <key>"
+		}
+		return s.EXISTS(parts[1])
+
+	case "TYPE":
+		if len(parts) != 2 {
+			return "usage: TYPE <key>"
+		}
+		return s.TYPE(parts[1])
+
 	case "ADD":
 		if len(parts) < 3 {
 			return "usage: ADD <key> <value>"

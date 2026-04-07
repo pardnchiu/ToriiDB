@@ -9,12 +9,6 @@ import (
 
 const tempDir = "./temp"
 
-type Entry struct {
-	Key       string `json:"key"`
-	Value     string `json:"value"`
-	CreatedAt int64  `json:"created_at"`
-}
-
 type Store struct {
 	mu   sync.RWMutex
 	data map[string]*Entry
