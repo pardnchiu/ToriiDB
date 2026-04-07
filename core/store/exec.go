@@ -37,15 +37,15 @@ func (s *Store) Exec(input string) string {
 		}
 		return s.Type(parts[1])
 
-	case "ADD":
+	case "SET":
 		if len(parts) < 3 {
-			return "usage: ADD <key> <value> [<seconds>]"
+			return "usage: SET <key> <value> [NX|XX] [<seconds>]"
 		}
 		key := parts[1]
-		value, expireAt := parseAddArgs(parts[2:])
+		value, flag, expireAt := parseSetArgs(parts[2:])
 
-		if err := s.Add(key, value, expireAt); err != nil {
-			return fmt.Sprintf("error: %v", err)
+		if err := s.Set(key, value, flag, expireAt); err != nil {
+			return "(nil)"
 		}
 		return "OK"
 
@@ -53,7 +53,11 @@ func (s *Store) Exec(input string) string {
 		if len(parts) != 2 {
 			return "usage: TTL <key>"
 		}
-		return fmt.Sprintf("(integer) %d", s.TTL(parts[1]))
+		ttl := s.TTL(parts[1])
+		if ttl == -2 {
+			return "(nil)"
+		}
+		return fmt.Sprintf("(integer) %d", ttl)
 
 	case "EXPIRE":
 		if len(parts) != 3 {
@@ -64,7 +68,7 @@ func (s *Store) Exec(input string) string {
 			return "error: seconds must be a positive integer"
 		}
 		if err := s.Expire(parts[1], sec); err != nil {
-			return err.Error()
+			return "(nil)"
 		}
 		return "OK"
 
@@ -77,7 +81,7 @@ func (s *Store) Exec(input string) string {
 			return "error: timestamp must be a valid integer"
 		}
 		if err := s.ExpireAt(parts[1], ts); err != nil {
-			return err.Error()
+			return "(nil)"
 		}
 		return "OK"
 
@@ -86,7 +90,7 @@ func (s *Store) Exec(input string) string {
 			return "usage: PERSIST <key>"
 		}
 		if err := s.Persist(parts[1]); err != nil {
-			return err.Error()
+			return "(nil)"
 		}
 		return "OK"
 
@@ -102,14 +106,30 @@ func (s *Store) Exec(input string) string {
 	}
 }
 
-func parseAddArgs(args []string) (string, *int64) {
-	if len(args) >= 2 {
-		sec, err := strconv.ParseInt(args[len(args)-1], 10, 64)
+func parseSetArgs(args []string) (string, SetFlag, *int64) {
+	flag := SetDefault
+	var expireAt *int64
+	end := len(args)
+
+	if end >= 2 {
+		sec, err := strconv.ParseInt(args[end-1], 10, 64)
 		if err == nil && sec > 0 {
-			value := strings.Join(args[:len(args)-1], " ")
-			expireAt := time.Now().Unix() + sec
-			return value, &expireAt
+			ts := time.Now().Unix() + sec
+			expireAt = &ts
+			end--
 		}
 	}
-	return strings.Join(args, " "), nil
+
+	if end >= 2 {
+		switch strings.ToUpper(args[end-1]) {
+		case "NX":
+			flag = SetNX
+			end--
+		case "XX":
+			flag = SetXX
+			end--
+		}
+	}
+
+	return strings.Join(args[:end], " "), flag, expireAt
 }

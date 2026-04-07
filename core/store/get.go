@@ -1,9 +1,6 @@
 package store
 
-import (
-	"fmt"
-	"time"
-)
+import "time"
 
 func (s *Store) Get(key string) (*Entry, bool) {
 	s.mu.RLock()
@@ -34,7 +31,7 @@ func (s *Store) Exist(key string) string {
 func (s *Store) Type(key string) string {
 	e, ok := s.Get(key)
 	if !ok || e == nil {
-		return fmt.Sprintf("not exist: %s", key)
+		return "(nil)"
 	}
 	return e.Type.String()
 }

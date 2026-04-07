@@ -27,22 +27,53 @@ type Entry struct {
 	Value     string    `json:"value"`
 	Type      ValueType `json:"type"`
 	CreatedAt int64     `json:"created_at"`
+	UpdatedAt *int64    `json:"updated_at,omitempty"`
 	ExpireAt  *int64    `json:"expire_at,omitempty"`
 }
 
-func (s *Store) Add(key, value string, expireAt *int64) error {
+type SetFlag int
+
+const (
+	SetDefault SetFlag = iota // upsert
+	SetNX                     // only if not exists
+	SetXX                     // only if exists
+)
+
+func (s *Store) Set(key, value string, flag SetFlag, expireAt *int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	entry := &Entry{
-		Key:       key,
-		Value:     value,
-		Type:      detectType(value),
-		CreatedAt: time.Now().Unix(),
-		ExpireAt:  expireAt,
+	now := time.Now().Unix()
+	existing, ok := s.data[key]
+
+	switch flag {
+	case SetNX:
+		if ok {
+			return fmt.Errorf("key already exists: %s", key)
+		}
+	case SetXX:
+		if !ok {
+			return fmt.Errorf("key not found: %s", key)
+		}
 	}
 
-	s.data[key] = entry
+	var entry *Entry
+	if ok {
+		existing.Value = value
+		existing.Type = detectType(value)
+		existing.UpdatedAt = &now
+		existing.ExpireAt = expireAt
+		entry = existing
+	} else {
+		entry = &Entry{
+			Key:       key,
+			Value:     value,
+			Type:      detectType(value),
+			CreatedAt: now,
+			ExpireAt:  expireAt,
+		}
+		s.data[key] = entry
+	}
 
 	path := filePath(key)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -58,7 +89,7 @@ func (s *Store) Add(key, value string, expireAt *int64) error {
 		return fmt.Errorf("write: %w", err)
 	}
 
-	return s.addToAOF("ADD", key, value, expireAt)
+	return s.addToAOF("SET", key, value, expireAt)
 }
 
 // * use redis-fallback 3 layers store
@@ -116,5 +147,3 @@ func (t ValueType) String() string {
 		return "unknown"
 	}
 }
-
-// TODO: SET

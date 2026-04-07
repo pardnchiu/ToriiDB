@@ -52,13 +52,20 @@ func replayAOF(path string) (map[string]*Entry, error) {
 		}
 
 		switch record.Command {
-		case "ADD":
-			data[record.Key] = &Entry{
-				Key:       record.Key,
-				Value:     record.Value,
-				Type:      detectType(record.Value),
-				CreatedAt: record.Timestamp,
-				ExpireAt:  record.ExpireAt,
+		case "SET":
+			if e, ok := data[record.Key]; ok {
+				e.Value = record.Value
+				e.Type = detectType(record.Value)
+				e.UpdatedAt = &record.Timestamp
+				e.ExpireAt = record.ExpireAt
+			} else {
+				data[record.Key] = &Entry{
+					Key:       record.Key,
+					Value:     record.Value,
+					Type:      detectType(record.Value),
+					CreatedAt: record.Timestamp,
+					ExpireAt:  record.ExpireAt,
+				}
 			}
 
 		case "DEL":
