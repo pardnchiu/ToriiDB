@@ -1,8 +1,11 @@
 package store
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
-func (s *Store) get(key string) (*Entry, bool) {
+func (s *Store) Get(key string) (*Entry, bool) {
 	s.mu.RLock()
 	e, ok := s.data[key]
 	s.mu.RUnlock()
@@ -21,17 +24,17 @@ func (s *Store) get(key string) (*Entry, bool) {
 	return e, true
 }
 
-func (s *Store) EXISTS(key string) string {
-	if e, ok := s.get(key); !ok || e == nil {
+func (s *Store) Exist(key string) string {
+	if e, ok := s.Get(key); !ok || e == nil {
 		return "(integer) 0"
 	}
 	return "(integer) 1"
 }
 
-func (s *Store) TYPE(key string) string {
-	e, ok := s.get(key)
+func (s *Store) Type(key string) string {
+	e, ok := s.Get(key)
 	if !ok || e == nil {
-		return "not exist"
+		return fmt.Sprintf("not exist: %s", key)
 	}
 	return e.Type.String()
 }

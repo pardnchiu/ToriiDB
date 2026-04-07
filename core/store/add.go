@@ -30,7 +30,7 @@ type Entry struct {
 	ExpireAt  *int64    `json:"expire_at,omitempty"`
 }
 
-func (s *Store) add(key, value string, expireAt *int64) error {
+func (s *Store) Add(key, value string, expireAt *int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

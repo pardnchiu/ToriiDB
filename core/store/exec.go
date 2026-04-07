@@ -20,7 +20,7 @@ func (s *Store) Exec(input string) string {
 		if len(parts) != 2 {
 			return "usage: GET <key>"
 		}
-		if e, ok := s.get(parts[1]); ok {
+		if e, ok := s.Get(parts[1]); ok {
 			return e.Value
 		}
 		return "(nil)"
@@ -29,13 +29,13 @@ func (s *Store) Exec(input string) string {
 		if len(parts) != 2 {
 			return "usage: EXIST <key>"
 		}
-		return s.EXISTS(parts[1])
+		return s.Exist(parts[1])
 
 	case "TYPE":
 		if len(parts) != 2 {
 			return "usage: TYPE <key>"
 		}
-		return s.TYPE(parts[1])
+		return s.Type(parts[1])
 
 	case "ADD":
 		if len(parts) < 3 {
@@ -44,8 +44,49 @@ func (s *Store) Exec(input string) string {
 		key := parts[1]
 		value, expireAt := parseAddArgs(parts[2:])
 
-		if err := s.add(key, value, expireAt); err != nil {
+		if err := s.Add(key, value, expireAt); err != nil {
 			return fmt.Sprintf("error: %v", err)
+		}
+		return "OK"
+
+	case "TTL":
+		if len(parts) != 2 {
+			return "usage: TTL <key>"
+		}
+		return fmt.Sprintf("(integer) %d", s.TTL(parts[1]))
+
+	case "EXPIRE":
+		if len(parts) != 3 {
+			return "usage: EXPIRE <key> <seconds>"
+		}
+		sec, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil || sec <= 0 {
+			return "error: seconds must be a positive integer"
+		}
+		if err := s.Expire(parts[1], sec); err != nil {
+			return err.Error()
+		}
+		return "OK"
+
+	case "EXPIREAT":
+		if len(parts) != 3 {
+			return "usage: EXPIREAT <key> <timestamp>"
+		}
+		ts, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil {
+			return "error: timestamp must be a valid integer"
+		}
+		if err := s.ExpireAt(parts[1], ts); err != nil {
+			return err.Error()
+		}
+		return "OK"
+
+	case "PERSIST":
+		if len(parts) != 2 {
+			return "usage: PERSIST <key>"
+		}
+		if err := s.Persist(parts[1]); err != nil {
+			return err.Error()
 		}
 		return "OK"
 
@@ -53,7 +94,7 @@ func (s *Store) Exec(input string) string {
 		if len(parts) < 2 {
 			return "usage: DEL <key> [key2] ..."
 		}
-		count := s.del(parts[1:]...)
+		count := s.Del(parts[1:]...)
 		return fmt.Sprintf("(integer) %d", count)
 
 	default:

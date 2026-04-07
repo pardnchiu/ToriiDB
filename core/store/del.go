@@ -2,7 +2,7 @@ package store
 
 import "os"
 
-func (s *Store) del(keys ...string) int {
+func (s *Store) Del(keys ...string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

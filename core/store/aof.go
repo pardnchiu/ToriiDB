@@ -63,6 +63,16 @@ func replayAOF(path string) (map[string]*Entry, error) {
 
 		case "DEL":
 			delete(data, record.Key)
+
+		case "EXPIRE", "EXPIREAT":
+			if e, ok := data[record.Key]; ok {
+				e.ExpireAt = record.ExpireAt
+			}
+
+		case "PERSIST":
+			if e, ok := data[record.Key]; ok {
+				e.ExpireAt = nil
+			}
 		}
 	}
 
