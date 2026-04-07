@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -76,18 +75,13 @@ func (s *Store) Set(key, value string, flag SetFlag, expireAt *int64) error {
 		db.data[key] = entry
 	}
 
-	path := db.filePath(key)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("mkdir: %w", err)
-	}
-
-	raw, err := json.MarshalIndent(entry, "", "  ")
+	raw, err := json.Marshal(entry)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
 
-	if err := os.WriteFile(path, raw, 0644); err != nil {
-		return fmt.Errorf("write: %w", err)
+	if err := writeFile(db.filePath(key), raw, 0644); err != nil {
+		return err
 	}
 
 	return db.addToAOF("SET", key, value, expireAt)

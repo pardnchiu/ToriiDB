@@ -107,11 +107,17 @@ func (s *Store) Close() error {
 
 	var firstErr error
 	for _, d := range s.dbs {
-		if d != nil && d.aof != nil {
-			if err := d.aof.Close(); err != nil && firstErr == nil {
+		if d == nil {
+			continue
+		}
+
+		d.mu.Lock()
+		if d.aof != nil {
+			if err := d.compact(); err != nil && firstErr == nil {
 				firstErr = err
 			}
 		}
+		d.mu.Unlock()
 	}
 	return firstErr
 }
