@@ -1,11 +1,24 @@
 package store
 
+import "time"
+
 func (s *Store) get(key string) (*Entry, bool) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	e, ok := s.data[key]
-	return e, ok
+	s.mu.RUnlock()
+
+	if !ok {
+		return nil, false
+	}
+
+	if e.ExpireAt != nil && *e.ExpireAt <= time.Now().Unix() {
+		s.mu.Lock()
+		delete(s.data, key)
+		s.mu.Unlock()
+		return nil, false
+	}
+
+	return e, true
 }
 
 func (s *Store) EXISTS(key string) string {
@@ -18,7 +31,7 @@ func (s *Store) EXISTS(key string) string {
 func (s *Store) TYPE(key string) string {
 	e, ok := s.get(key)
 	if !ok || e == nil {
-		return "none"
+		return "not exist"
 	}
 	return e.Type.String()
 }

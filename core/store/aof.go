@@ -7,12 +7,13 @@ import (
 	"time"
 )
 
-func (s *Store) addToAOF(cmd, key, value string) error {
+func (s *Store) addToAOF(cmd, key, value string, expireAt *int64) error {
 	record := AOFRecord{
 		Timestamp: time.Now().Unix(),
 		Command:   cmd,
 		Key:       key,
 		Value:     value,
+		ExpireAt:  expireAt,
 	}
 
 	raw, err := json.Marshal(record)
@@ -57,6 +58,7 @@ func replayAOF(path string) (map[string]*Entry, error) {
 				Value:     record.Value,
 				Type:      detectType(record.Value),
 				CreatedAt: record.Timestamp,
+				ExpireAt:  record.ExpireAt,
 			}
 
 		case "DEL":

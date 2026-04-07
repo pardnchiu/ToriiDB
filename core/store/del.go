@@ -14,7 +14,7 @@ func (s *Store) del(keys ...string) int {
 
 		delete(s.data, key)
 		os.Remove(filePath(key))
-		s.addToAOF("DEL", key, "")
+		s.addToAOF("DEL", key, "", nil)
 		count++
 	}
 

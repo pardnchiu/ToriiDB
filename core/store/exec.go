@@ -2,7 +2,9 @@ package store
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func (s *Store) Exec(input string) string {
@@ -37,12 +39,12 @@ func (s *Store) Exec(input string) string {
 
 	case "ADD":
 		if len(parts) < 3 {
-			return "usage: ADD <key> <value>"
+			return "usage: ADD <key> <value> [<seconds>]"
 		}
 		key := parts[1]
-		value := strings.Join(parts[2:], " ")
+		value, expireAt := parseAddArgs(parts[2:])
 
-		if err := s.add(key, value); err != nil {
+		if err := s.add(key, value, expireAt); err != nil {
 			return fmt.Sprintf("error: %v", err)
 		}
 		return "OK"
@@ -57,4 +59,16 @@ func (s *Store) Exec(input string) string {
 	default:
 		return fmt.Sprintf("unknown: %s", cmd)
 	}
+}
+
+func parseAddArgs(args []string) (string, *int64) {
+	if len(args) >= 2 {
+		sec, err := strconv.ParseInt(args[len(args)-1], 10, 64)
+		if err == nil && sec > 0 {
+			value := strings.Join(args[:len(args)-1], " ")
+			expireAt := time.Now().Unix() + sec
+			return value, &expireAt
+		}
+	}
+	return strings.Join(args, " "), nil
 }

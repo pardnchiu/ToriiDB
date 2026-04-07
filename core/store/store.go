@@ -20,6 +20,7 @@ type AOFRecord struct {
 	Command   string `json:"cmd"`
 	Key       string `json:"key"`
 	Value     string `json:"value,omitempty"`
+	ExpireAt  *int64 `json:"expire_at,omitempty"`
 }
 
 func New() (*Store, error) {

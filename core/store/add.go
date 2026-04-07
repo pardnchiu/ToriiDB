@@ -27,9 +27,10 @@ type Entry struct {
 	Value     string    `json:"value"`
 	Type      ValueType `json:"type"`
 	CreatedAt int64     `json:"created_at"`
+	ExpireAt  *int64    `json:"expire_at,omitempty"`
 }
 
-func (s *Store) add(key, value string) error {
+func (s *Store) add(key, value string, expireAt *int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -38,6 +39,7 @@ func (s *Store) add(key, value string) error {
 		Value:     value,
 		Type:      detectType(value),
 		CreatedAt: time.Now().Unix(),
+		ExpireAt:  expireAt,
 	}
 
 	s.data[key] = entry
@@ -56,7 +58,7 @@ func (s *Store) add(key, value string) error {
 		return fmt.Errorf("write: %w", err)
 	}
 
-	return s.addToAOF("ADD", key, value)
+	return s.addToAOF("ADD", key, value, expireAt)
 }
 
 // * use redis-fallback 3 layers store
