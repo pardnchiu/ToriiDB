@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,11 +15,17 @@ import (
 )
 
 func main() {
-	store := NewStore()
-	reader := bufio.NewReader(os.Stdin)
+	store, err := NewStore()
+	if err != nil {
+		slog.Error("NewStore",
+			slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer store.Close()
 
 	fmt.Print("toriidb> ")
 
+	reader := bufio.NewReader(os.Stdin)
 	for {
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -34,7 +41,10 @@ func main() {
 			continue
 		}
 
-		if strings.EqualFold(input, "quit") || strings.EqualFold(input, "exit") {
+		if map[string]bool{
+			"quit": true,
+			"exit": true,
+		}[input] {
 			break
 		}
 
@@ -54,12 +64,102 @@ type Entry struct {
 type Store struct {
 	mu   sync.RWMutex
 	data map[string]*Entry
+	aof  *os.File
 }
 
-func NewStore() *Store {
-	return &Store{
-		data: make(map[string]*Entry),
+type AOFRecord struct {
+	Timestamp int64  `json:"ts"`
+	Command   string `json:"cmd"`
+	Key       string `json:"key"`
+	Value     string `json:"value,omitempty"`
+}
+
+func NewStore() (*Store, error) {
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return nil, fmt.Errorf("mkdir: %w", err)
 	}
+
+	aofPath := filepath.Join(tempDir, "record.aof")
+	file, err := os.OpenFile(aofPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("open aof: %w", err)
+	}
+
+	data, err := replayAOF(aofPath)
+	if err != nil {
+		return nil, fmt.Errorf("replayAOF: %w", err)
+	}
+
+	return &Store{
+		data: data,
+		aof:  file,
+	}, nil
+}
+
+func replayAOF(path string) (map[string]*Entry, error) {
+	data := make(map[string]*Entry)
+	file, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return data, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		var record AOFRecord
+		if json.Unmarshal([]byte(line), &record) != nil {
+			continue
+		}
+
+		switch record.Command {
+		case "ADD":
+			data[record.Key] = &Entry{
+				Key:       record.Key,
+				Value:     record.Value,
+				CreatedAt: record.Timestamp,
+			}
+
+		case "DEL":
+			delete(data, record.Key)
+		}
+	}
+
+	return data, scanner.Err()
+}
+
+func (s *Store) addToAOF(cmd, key, value string) error {
+	rec := AOFRecord{
+		Timestamp: time.Now().Unix(),
+		Command:   cmd,
+		Key:       key,
+		Value:     value,
+	}
+
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		return err
+	}
+
+	if _, err := s.aof.WriteString(string(raw) + "\n"); err != nil {
+		return err
+	}
+
+	return s.aof.Sync()
+}
+
+func (s *Store) Close() error {
+	if s.aof != nil {
+		return s.aof.Close()
+	}
+	return nil
 }
 
 func (s *Store) exec(input string) string {
@@ -91,6 +191,13 @@ func (s *Store) exec(input string) string {
 			return fmt.Sprintf("error: %v", err)
 		}
 		return "OK"
+
+	case "DEL":
+		if len(parts) < 2 {
+			return "usage: DEL <key> [key2] ..."
+		}
+		count := s.del(parts[1:]...)
+		return fmt.Sprintf("(integer) %d", count)
 
 	default:
 		return fmt.Sprintf("unknown: %s", cmd)
@@ -131,7 +238,26 @@ func (s *Store) add(key, value string) error {
 		return fmt.Errorf("write: %w", err)
 	}
 
-	return nil
+	return s.addToAOF("ADD", key, value)
+}
+
+func (s *Store) del(keys ...string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := 0
+	for _, key := range keys {
+		if _, ok := s.data[key]; !ok {
+			continue
+		}
+
+		delete(s.data, key)
+		os.Remove(filePath(key))
+		s.addToAOF("DEL", key, "")
+		count++
+	}
+
+	return count
 }
 
 // * use redis-fallback 3 layers store
