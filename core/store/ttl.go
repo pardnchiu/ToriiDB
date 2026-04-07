@@ -24,10 +24,11 @@ func (s *Store) TTL(key string) int64 {
 }
 
 func (s *Store) Expire(key string, seconds int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	db := s.DB()
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
-	e, ok := s.data[key]
+	e, ok := db.data[key]
 	if !ok {
 		return fmt.Errorf("not exist")
 	}
@@ -35,33 +36,35 @@ func (s *Store) Expire(key string, seconds int64) error {
 	expireAt := time.Now().Unix() + seconds
 	e.ExpireAt = &expireAt
 
-	return s.addToAOF("EXPIRE", key, fmt.Sprintf("%d", seconds), &expireAt)
+	return db.addToAOF("EXPIRE", key, fmt.Sprintf("%d", seconds), &expireAt)
 }
 
 func (s *Store) ExpireAt(key string, timestamp int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	db := s.DB()
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
-	e, ok := s.data[key]
+	e, ok := db.data[key]
 	if !ok {
 		return fmt.Errorf("not exist")
 	}
 
 	e.ExpireAt = &timestamp
 
-	return s.addToAOF("EXPIREAT", key, fmt.Sprintf("%d", timestamp), &timestamp)
+	return db.addToAOF("EXPIREAT", key, fmt.Sprintf("%d", timestamp), &timestamp)
 }
 
 func (s *Store) Persist(key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	db := s.DB()
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
-	e, ok := s.data[key]
+	e, ok := db.data[key]
 	if !ok {
 		return fmt.Errorf("not exist")
 	}
 
 	e.ExpireAt = nil
 
-	return s.addToAOF("PERSIST", key, "", nil)
+	return db.addToAOF("PERSIST", key, "", nil)
 }

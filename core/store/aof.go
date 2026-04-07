@@ -7,7 +7,11 @@ import (
 	"time"
 )
 
-func (s *Store) addToAOF(cmd, key, value string, expireAt *int64) error {
+func (d *db) addToAOF(cmd, key, value string, expireAt *int64) error {
+	if err := d.init(); err != nil {
+		return err
+	}
+
 	record := AOFRecord{
 		Timestamp: time.Now().Unix(),
 		Command:   cmd,
@@ -21,11 +25,11 @@ func (s *Store) addToAOF(cmd, key, value string, expireAt *int64) error {
 		return err
 	}
 
-	if _, err := s.aof.WriteString(string(raw) + "\n"); err != nil {
+	if _, err := d.aof.WriteString(string(raw) + "\n"); err != nil {
 		return err
 	}
 
-	return s.aof.Sync()
+	return d.aof.Sync()
 }
 
 func replayAOF(path string) (map[string]*Entry, error) {

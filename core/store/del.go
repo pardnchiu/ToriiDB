@@ -3,18 +3,19 @@ package store
 import "os"
 
 func (s *Store) Del(keys ...string) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	db := s.DB()
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
 	count := 0
 	for _, key := range keys {
-		if _, ok := s.data[key]; !ok {
+		if _, ok := db.data[key]; !ok {
 			continue
 		}
 
-		delete(s.data, key)
-		os.Remove(filePath(key))
-		s.addToAOF("DEL", key, "", nil)
+		delete(db.data, key)
+		os.Remove(db.filePath(key))
+		db.addToAOF("DEL", key, "", nil)
 		count++
 	}
 

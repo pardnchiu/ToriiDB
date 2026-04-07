@@ -20,7 +20,11 @@ func main() {
 	}
 	defer torii.Close()
 
-	fmt.Print("toriidb> ")
+	command := func() {
+		fmt.Printf("toriidb[%d]> ", torii.Current())
+	}
+
+	command()
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -34,7 +38,7 @@ func main() {
 
 		input = strings.TrimSpace(input)
 		if input == "" {
-			fmt.Print("toriidb> ")
+			command()
 			continue
 		}
 
@@ -46,6 +50,6 @@ func main() {
 		}
 
 		fmt.Println(torii.Exec(input))
-		fmt.Print("toriidb> ")
+		command()
 	}
 }

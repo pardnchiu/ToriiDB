@@ -3,18 +3,19 @@ package store
 import "time"
 
 func (s *Store) Get(key string) (*Entry, bool) {
-	s.mu.RLock()
-	e, ok := s.data[key]
-	s.mu.RUnlock()
+	db := s.DB()
+	db.mu.RLock()
+	e, ok := db.data[key]
+	db.mu.RUnlock()
 
 	if !ok {
 		return nil, false
 	}
 
 	if e.ExpireAt != nil && *e.ExpireAt <= time.Now().Unix() {
-		s.mu.Lock()
-		delete(s.data, key)
-		s.mu.Unlock()
+		db.mu.Lock()
+		delete(db.data, key)
+		db.mu.Unlock()
 		return nil, false
 	}
 
@@ -35,5 +36,3 @@ func (s *Store) Type(key string) string {
 	}
 	return e.Type.String()
 }
-
-// TODO: SEL

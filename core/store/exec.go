@@ -101,6 +101,19 @@ func (s *Store) Exec(input string) string {
 		count := s.Del(parts[1:]...)
 		return fmt.Sprintf("(integer) %d", count)
 
+	case "SELECT":
+		if len(parts) != 2 {
+			return "usage: SELECT <db> (0-15)"
+		}
+		index, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return "error: db index must be an integer"
+		}
+		if err := s.Select(index); err != nil {
+			return fmt.Sprintf("error: %v", err)
+		}
+		return "OK"
+
 	default:
 		return fmt.Sprintf("unknown: %s", cmd)
 	}

@@ -40,11 +40,12 @@ const (
 )
 
 func (s *Store) Set(key, value string, flag SetFlag, expireAt *int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	db := s.DB()
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
 	now := time.Now().Unix()
-	existing, ok := s.data[key]
+	existing, ok := db.data[key]
 
 	switch flag {
 	case SetNX:
@@ -72,10 +73,10 @@ func (s *Store) Set(key, value string, flag SetFlag, expireAt *int64) error {
 			CreatedAt: now,
 			ExpireAt:  expireAt,
 		}
-		s.data[key] = entry
+		db.data[key] = entry
 	}
 
-	path := filePath(key)
+	path := db.filePath(key)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
@@ -89,13 +90,13 @@ func (s *Store) Set(key, value string, flag SetFlag, expireAt *int64) error {
 		return fmt.Errorf("write: %w", err)
 	}
 
-	return s.addToAOF("SET", key, value, expireAt)
+	return db.addToAOF("SET", key, value, expireAt)
 }
 
 // * use redis-fallback 3 layers store
-func filePath(key string) string {
+func (d *db) filePath(key string) string {
 	h := fmt.Sprintf("%x", md5.Sum([]byte(key)))
-	return filepath.Join(tempDir, h[0:2], h[2:4], h[4:6], h+".json")
+	return filepath.Join(d.dir, h[0:2], h[2:4], h[4:6], h+".json")
 }
 
 func detectType(value string) ValueType {
