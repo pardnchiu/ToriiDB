@@ -88,3 +88,16 @@ func Vtoa(value any) string {
 		return fmt.Sprintf("%v", val)
 	}
 }
+
+func Vtof(value any) (float64, bool) {
+	switch n := value.(type) {
+	case float64:
+		return n, true
+
+	case int64:
+		return float64(n), true
+
+	default:
+		return 0, false
+	}
+}

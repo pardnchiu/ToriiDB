@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
 func (s *Store) Exec(input string) string {
@@ -109,6 +111,31 @@ func (s *Store) Exec(input string) string {
 			return "(nil)"
 		}
 		return "OK"
+
+	case "INCR":
+		if len(parts) < 2 || len(parts) > 3 {
+			return "usage: INCR <key> [delta]"
+		}
+		delta := 1.0
+		if len(parts) == 3 {
+			d, err := strconv.ParseFloat(parts[2], 64)
+			if err != nil {
+				return "error: delta must be a number"
+			}
+			delta = d
+		}
+		mainKey, subKeys := splitKey(parts[1])
+		var result float64
+		var err error
+		if len(subKeys) > 0 {
+			result, err = s.IncrField(mainKey, subKeys, delta)
+		} else {
+			result, err = s.Incr(mainKey, delta)
+		}
+		if err != nil {
+			return "(nil)"
+		}
+		return utils.Vtoa(result)
 
 	case "DEL":
 		if len(parts) < 2 {
