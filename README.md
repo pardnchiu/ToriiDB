@@ -6,6 +6,17 @@
 
 ## 已完成功能
 
+### 2026-04-08
+
+- `KEYS` glob 模式匹配
+- `GET`/`SET`/`DEL` 支援 dot-notation 巢狀欄位存取
+- `INCR` 數值遞增（獨立 key 與巢狀 JSON 欄位）
+- `FIND` 全域值搜尋（EQ / GT / LT / LIKE）
+- AOF compaction on close（atomic file write）
+- 修正無寫入 session 時 AOF compaction 被跳過的問題
+
+### 2026-04-07
+
 - 記憶體儲存（per-DB 獨立）
 - MD5 三層目錄 JSON 快取
 - AOF 持久化與啟動 replay
