@@ -20,7 +20,16 @@ func (s *Store) Exec(input string) string {
 		if len(parts) != 2 {
 			return "usage: GET <key>"
 		}
-		if e, ok := s.Get(parts[1]); ok {
+		key := parts[1]
+		mainKey, subKeys := splitKey(key)
+		if len(subKeys) > 0 {
+			if val, ok := s.GetField(mainKey, subKeys); ok {
+				return val
+			}
+			return "(nil)"
+		}
+
+		if e, ok := s.Get(mainKey); ok {
 			return e.Value
 		}
 		return "(nil)"
@@ -42,7 +51,14 @@ func (s *Store) Exec(input string) string {
 			return "usage: SET <key> <value> [NX|XX] [<seconds>]"
 		}
 		key := parts[1]
+		mainKey, subKeys := splitKey(key)
 		value, flag, expireAt := parseSetArgs(parts[2:])
+		if len(subKeys) > 0 {
+			if err := s.SetField(mainKey, subKeys, value, flag, expireAt); err != nil {
+				return "(nil)"
+			}
+			return "OK"
+		}
 
 		if err := s.Set(key, value, flag, expireAt); err != nil {
 			return "(nil)"
@@ -162,4 +178,19 @@ func parseSetArgs(args []string) (string, SetFlag, *int64) {
 	}
 
 	return strings.Join(args[:end], " "), flag, expireAt
+}
+
+func splitKey(key string) (string, []string) {
+	mainKey, subKeys, ok := strings.Cut(key, ".")
+	if !ok || subKeys == "" {
+		return mainKey, nil
+	}
+
+	var keys []string
+	for subKey := range strings.SplitSeq(subKeys, ".") {
+		if subKey != "" {
+			keys = append(keys, subKey)
+		}
+	}
+	return mainKey, keys
 }

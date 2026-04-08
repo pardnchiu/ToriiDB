@@ -79,7 +79,7 @@ func (s *Store) Set(key, value string, flag SetFlag, expireAt *int64) error {
 
 	raw, err := json.Marshal(entry)
 	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
+		return fmt.Errorf("json.Marshalz: %w", err)
 	}
 
 	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
