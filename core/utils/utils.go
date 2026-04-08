@@ -1,4 +1,4 @@
-package store
+package utils
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-func writeFile(path string, content []byte, perm os.FileMode) error {
+func WriteFile(path string, content []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll: %w", err)

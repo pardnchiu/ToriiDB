@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
 type ValueType int
@@ -80,7 +82,7 @@ func (s *Store) Set(key, value string, flag SetFlag, expireAt *int64) error {
 		return fmt.Errorf("marshal: %w", err)
 	}
 
-	if err := writeFile(db.filePath(key), raw, 0644); err != nil {
+	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
 		return err
 	}
 

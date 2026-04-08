@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"time"
+
+	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
 func (d *db) compact() error {
@@ -39,5 +41,5 @@ func (d *db) compact() error {
 	d.aof.Close()
 	d.aof = nil
 
-	return writeFile(filepath.Join(d.dir, "record.aof"), buf, 0644)
+	return utils.WriteFile(filepath.Join(d.dir, "record.aof"), buf, 0644)
 }
