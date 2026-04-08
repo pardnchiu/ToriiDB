@@ -40,13 +40,21 @@ func (s *Store) Exec(input string) string {
 		if len(parts) != 2 {
 			return "usage: EXIST <key>"
 		}
-		return s.Exist(parts[1])
+		mainKey, subKeys := splitKey(parts[1])
+		if len(subKeys) > 0 {
+			return s.ExistField(mainKey, subKeys)
+		}
+		return s.Exist(mainKey)
 
 	case "TYPE":
 		if len(parts) != 2 {
 			return "usage: TYPE <key>"
 		}
-		return s.Type(parts[1])
+		mainKey, subKeys := splitKey(parts[1])
+		if len(subKeys) > 0 {
+			return s.TypeField(mainKey, subKeys)
+		}
+		return s.Type(mainKey)
 
 	case "SET":
 		if len(parts) < 3 {

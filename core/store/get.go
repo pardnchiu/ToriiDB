@@ -57,10 +57,26 @@ func (s *Store) Exist(key string) string {
 	return "(integer) 1"
 }
 
+func (s *Store) ExistField(key string, subKeys []string) string {
+	if _, ok := s.GetField(key, subKeys); !ok {
+		return "(integer) 0"
+	}
+	return "(integer) 1"
+}
+
 func (s *Store) Type(key string) string {
 	e, ok := s.Get(key)
 	if !ok || e == nil {
 		return "(nil)"
 	}
 	return e.Type.String()
+}
+
+func (s *Store) TypeField(key string, subKeys []string) string {
+	val, ok := s.GetField(key, subKeys)
+	if !ok {
+		return "(nil)"
+	}
+
+	return detectType(val).String()
 }
