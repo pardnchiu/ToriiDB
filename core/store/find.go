@@ -15,6 +15,7 @@ const (
 	FindGreaterThanOrEqualTo
 	FindLessThan
 	FindLessThanOrEqualTo
+	FindNotEqualTo
 	FindLIKE
 )
 
@@ -34,6 +35,9 @@ func ParseFindOp(s string) (FindOperation, bool) {
 
 	case "LE", "<=":
 		return FindLessThanOrEqualTo, true
+
+	case "NE", "!=":
+		return FindNotEqualTo, true
 
 	case "LIKE":
 		return FindLIKE, true
@@ -126,6 +130,9 @@ func matchValue(stored string, op FindOperation, target string) bool {
 			return false
 		}
 		return sv <= tv
+
+	case FindNotEqualTo:
+		return stored != target
 
 	case FindLIKE:
 		return matchText(stored, target)

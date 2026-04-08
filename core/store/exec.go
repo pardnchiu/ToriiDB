@@ -175,7 +175,7 @@ func (s *Store) Exec(input string) string {
 		}
 		op, ok := ParseFindOp(parts[1])
 		if !ok {
-			return "error: operator must be eq, gt, ge, lt, le, or like"
+			return "error: operator must be eq, ne, gt, ge, lt, le, or like"
 		}
 		tail, limit := parseLimit(parts[2:])
 		value := strings.Join(tail, " ")
@@ -188,7 +188,7 @@ func (s *Store) Exec(input string) string {
 		field := parts[1]
 		op, ok := ParseFindOp(parts[2])
 		if !ok {
-			return "error: operator must be eq, gt, ge, lt, le, or like"
+			return "error: operator must be eq, ne, gt, ge, lt, le, or like"
 		}
 		tail, limit := parseLimit(parts[3:])
 		value := strings.Join(tail, " ")
