@@ -114,6 +114,16 @@ func (s *Store) Exec(input string) string {
 		if len(parts) < 2 {
 			return "usage: DEL <key> [key2] ..."
 		}
+		// * single key with dot notation → delete field
+		if len(parts) == 2 {
+			mainKey, subKeys := splitKey(parts[1])
+			if len(subKeys) > 0 {
+				if err := s.DelField(mainKey, subKeys); err != nil {
+					return "(nil)"
+				}
+				return "OK"
+			}
+		}
 		count := s.Del(parts[1:]...)
 		return fmt.Sprintf("(integer) %d", count)
 

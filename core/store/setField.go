@@ -119,7 +119,11 @@ func walkKeysAndSet(obj map[string]any, fields []string, value any) error {
 	last := fields[len(fields)-1]
 	switch v := newObj.(type) {
 	case map[string]any:
-		v[last] = value
+		if value == nil {
+			delete(v, last)
+		} else {
+			v[last] = value
+		}
 	case []any:
 		idx, err := strconv.Atoi(last)
 		if err != nil || idx < 0 || idx >= len(v) {
