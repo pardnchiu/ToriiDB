@@ -171,27 +171,28 @@ func (s *Store) Exec(input string) string {
 
 	case "FIND":
 		if len(parts) < 3 {
-			return "usage: FIND <eq|gt|ge|lt|le|like> <value>"
+			return "usage: FIND <op> <value> [LIMIT <n>]"
 		}
 		op, ok := ParseFindOp(parts[1])
 		if !ok {
 			return "error: operator must be eq, gt, ge, lt, le, or like"
 		}
-		value := strings.Join(parts[2:], " ")
-		keys := s.Find(op, value)
-		return showList(keys)
+		tail, limit := parseLimit(parts[2:])
+		value := strings.Join(tail, " ")
+		return showList(s.Find(op, value, limit))
 
 	case "QUERY":
 		if len(parts) < 4 {
-			return "usage: QUERY <field> <op> <value>"
+			return "usage: QUERY <field> <op> <value> [LIMIT <n>]"
 		}
 		field := parts[1]
 		op, ok := ParseFindOp(parts[2])
 		if !ok {
 			return "error: operator must be eq, gt, ge, lt, le, or like"
 		}
-		value := strings.Join(parts[3:], " ")
-		return showList(s.Query(field, op, value))
+		tail, limit := parseLimit(parts[3:])
+		value := strings.Join(tail, " ")
+		return showList(s.Query(field, op, value, limit))
 
 	case "SELECT":
 		if len(parts) != 2 {
@@ -209,6 +210,16 @@ func (s *Store) Exec(input string) string {
 	default:
 		return fmt.Sprintf("unknown: %s", cmd)
 	}
+}
+
+func parseLimit(args []string) ([]string, int) {
+	n := len(args)
+	if n >= 2 && strings.ToUpper(args[n-2]) == "LIMIT" {
+		if v, err := strconv.Atoi(args[n-1]); err == nil && v > 0 {
+			return args[:n-2], v
+		}
+	}
+	return args, 0
 }
 
 func parseSetArgs(args []string) (string, SetFlag, *int64) {

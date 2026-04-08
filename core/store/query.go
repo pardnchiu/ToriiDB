@@ -2,14 +2,13 @@ package store
 
 import (
 	"encoding/json"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
-func (s *Store) Query(field string, op FindOperation, value string) []string {
+func (s *Store) Query(field string, op FindOperation, value string, limit int) []string {
 	var subKeys []string
 	for part := range strings.SplitSeq(field, ".") {
 		if part != "" {
@@ -23,7 +22,7 @@ func (s *Store) Query(field string, op FindOperation, value string) []string {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	var result []string
+	var items []sortItem
 	for key, e := range db.data {
 		if e.ExpireAt != nil && *e.ExpireAt <= now {
 			continue
@@ -43,10 +42,9 @@ func (s *Store) Query(field string, op FindOperation, value string) []string {
 		}
 
 		if matchValue(utils.Vtoa(val), op, value) {
-			result = append(result, key+": "+e.Value)
+			items = append(items, sortItem{display: key + ": " + e.Value, ts: entryTime(e)})
 		}
 	}
 
-	sort.Strings(result)
-	return result
+	return sortAndCollect(items, limit)
 }
