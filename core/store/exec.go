@@ -101,6 +101,23 @@ func (s *Store) Exec(input string) string {
 		count := s.Del(parts[1:]...)
 		return fmt.Sprintf("(integer) %d", count)
 
+	case "KEYS":
+		if len(parts) != 2 {
+			return "usage: KEYS <pattern>"
+		}
+		keys := s.Keys(parts[1])
+		if len(keys) == 0 {
+			return "(empty list)"
+		}
+		var b strings.Builder
+		for i, k := range keys {
+			if i > 0 {
+				b.WriteByte('\n')
+			}
+			fmt.Fprintf(&b, "%d) %s", i+1, k)
+		}
+		return b.String()
+
 	case "SELECT":
 		if len(parts) != 2 {
 			return "usage: SELECT <db> (0-15)"
