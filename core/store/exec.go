@@ -167,17 +167,7 @@ func (s *Store) Exec(input string) string {
 			return "usage: KEYS <pattern>"
 		}
 		keys := s.Keys(parts[1])
-		if len(keys) == 0 {
-			return "(empty list)"
-		}
-		var b strings.Builder
-		for i, k := range keys {
-			if i > 0 {
-				b.WriteByte('\n')
-			}
-			fmt.Fprintf(&b, "%d) %s", i+1, k)
-		}
-		return b.String()
+		return showList(keys)
 
 	case "FIND":
 		if len(parts) < 3 {
@@ -189,17 +179,19 @@ func (s *Store) Exec(input string) string {
 		}
 		value := strings.Join(parts[2:], " ")
 		keys := s.Find(op, value)
-		if len(keys) == 0 {
-			return "(empty list)"
+		return showList(keys)
+
+	case "QUERY":
+		if len(parts) < 4 {
+			return "usage: QUERY <field> <op> <value>"
 		}
-		var b strings.Builder
-		for i, k := range keys {
-			if i > 0 {
-				b.WriteByte('\n')
-			}
-			fmt.Fprintf(&b, "%d) %s", i+1, k)
+		field := parts[1]
+		op, ok := ParseFindOp(parts[2])
+		if !ok {
+			return "error: operator must be eq, gt, ge, lt, le, or like"
 		}
-		return b.String()
+		value := strings.Join(parts[3:], " ")
+		return showList(s.Query(field, op, value))
 
 	case "SELECT":
 		if len(parts) != 2 {
@@ -260,4 +252,19 @@ func splitKey(key string) (string, []string) {
 		}
 	}
 	return mainKey, keys
+}
+
+func showList(keys []string) string {
+	if len(keys) == 0 {
+		return "(empty list)"
+	}
+
+	var sb strings.Builder
+	for i, key := range keys {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		fmt.Fprintf(&sb, "%d) %s", i+1, key)
+	}
+	return sb.String()
 }
