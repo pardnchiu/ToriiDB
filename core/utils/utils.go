@@ -9,6 +9,31 @@ import (
 	"strings"
 )
 
+func WalkKeys(obj any, subKeys []string) (any, bool) {
+	current := obj
+	for _, key := range subKeys {
+		switch targetType := current.(type) {
+		case map[string]any:
+			sub, ok := targetType[key]
+			if !ok {
+				return nil, false
+			}
+			current = sub
+
+		case []any:
+			idx, err := strconv.Atoi(key)
+			if err != nil || idx < 0 || idx >= len(targetType) {
+				return nil, false
+			}
+			current = targetType[idx]
+
+		default:
+			return nil, false
+		}
+	}
+	return current, true
+}
+
 func WriteFile(path string, content []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {

@@ -1,6 +1,11 @@
 package store
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/pardnchiu/ToriiDB/core/utils"
+)
 
 func (s *Store) Get(key string) (*Entry, bool) {
 	db := s.DB()
@@ -20,6 +25,29 @@ func (s *Store) Get(key string) (*Entry, bool) {
 	}
 
 	return e, true
+}
+
+func (s *Store) GetField(key string, subKeys []string) (string, bool) {
+	entry, ok := s.Get(key)
+	if !ok {
+		return "", false
+	}
+
+	if entry.Type != TypeJSON {
+		return "", false
+	}
+
+	var obj any
+	if err := json.Unmarshal([]byte(entry.Value), &obj); err != nil {
+		return "", false
+	}
+
+	val, ok := utils.WalkKeys(obj, subKeys)
+	if !ok {
+		return "", false
+	}
+
+	return utils.Vtoa(val), true
 }
 
 func (s *Store) Exist(key string) string {

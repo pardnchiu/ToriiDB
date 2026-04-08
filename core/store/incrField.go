@@ -26,7 +26,7 @@ func (s *Store) IncrField(key string, subKeys []string, delta float64) (float64,
 		return 0, fmt.Errorf("json.Unmarshal: %w", err)
 	}
 
-	val, ok := walkKeys(obj, subKeys)
+	val, ok := utils.WalkKeys(obj, subKeys)
 	if !ok {
 		return 0, fmt.Errorf("field not found")
 	}
