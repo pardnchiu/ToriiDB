@@ -11,7 +11,7 @@
 - `KEYS` glob 模式匹配
 - `GET`/`SET`/`DEL` 支援 dot-notation 巢狀欄位存取
 - `INCR` 數值遞增（獨立 key 與巢狀 JSON 欄位）
-- `FIND` 全域值搜尋（EQ / GT / LT / LIKE）
+- `FIND` 全域值搜尋（EQ / GT / GE / LT / LE / LIKE）
 - AOF compaction on close（atomic file write）
 - 修正無寫入 session 時 AOF compaction 被跳過的問題
 

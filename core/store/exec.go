@@ -171,6 +171,28 @@ func (s *Store) Exec(input string) string {
 		}
 		return b.String()
 
+	case "FIND":
+		if len(parts) < 3 {
+			return "usage: FIND <eq|gt|ge|lt|le|like> <value>"
+		}
+		op, ok := ParseFindOp(parts[1])
+		if !ok {
+			return "error: operator must be eq, gt, ge, lt, le, or like"
+		}
+		value := strings.Join(parts[2:], " ")
+		keys := s.Find(op, value)
+		if len(keys) == 0 {
+			return "(empty list)"
+		}
+		var b strings.Builder
+		for i, k := range keys {
+			if i > 0 {
+				b.WriteByte('\n')
+			}
+			fmt.Fprintf(&b, "%d) %s", i+1, k)
+		}
+		return b.String()
+
 	case "SELECT":
 		if len(parts) != 2 {
 			return "usage: SELECT <db> (0-15)"
