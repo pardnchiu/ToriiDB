@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -9,7 +10,13 @@ import (
 )
 
 func (d *db) compact() error {
-	if d.aof == nil {
+	if d.aof != nil {
+		d.aof.Close()
+		d.aof = nil
+	}
+
+	if len(d.data) == 0 {
+		os.Remove(filepath.Join(d.dir, "record.aof"))
 		return nil
 	}
 
@@ -37,9 +44,6 @@ func (d *db) compact() error {
 		buf = append(buf, raw...)
 		buf = append(buf, '\n')
 	}
-
-	d.aof.Close()
-	d.aof = nil
 
 	return utils.WriteFile(filepath.Join(d.dir, "record.aof"), buf, 0644)
 }

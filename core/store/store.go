@@ -112,10 +112,8 @@ func (s *Store) Close() error {
 		}
 
 		d.mu.Lock()
-		if d.aof != nil {
-			if err := d.compact(); err != nil && firstErr == nil {
-				firstErr = err
-			}
+		if err := d.compact(); err != nil && firstErr == nil {
+			firstErr = err
 		}
 		d.mu.Unlock()
 	}

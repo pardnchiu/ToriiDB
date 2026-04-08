@@ -6,7 +6,9 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/pardnchiu/ToriiDB/core/store"
 )
@@ -19,6 +21,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer torii.Close()
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sig
+		torii.Close()
+		os.Exit(0)
+	}()
 
 	command := func() {
 		fmt.Printf("toriidb[%d]> ", torii.Current())
