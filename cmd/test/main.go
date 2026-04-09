@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -16,8 +15,7 @@ import (
 func main() {
 	torii, err := store.New()
 	if err != nil {
-		slog.Error("NewStore",
-			slog.String("error", err.Error()))
+		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		os.Exit(1)
 	}
 	defer torii.Close()
