@@ -2,10 +2,13 @@ package store
 
 import (
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/pardnchiu/ToriiDB/core/store/filter"
 )
+
+const sliceBlock = 1024
 
 type sortItem struct {
 	display string
@@ -38,6 +41,38 @@ func sortAndCollect(items []sortItem, limit int) []string {
 	return result
 }
 
+func sliceScan(keys []string, scan func(keys []string) []sortItem) []sortItem {
+	n := len(keys)
+	if n <= sliceBlock {
+		return scan(keys)
+	}
+
+	chunks := (n + sliceBlock - 1) / sliceBlock
+	shards := make([][]sortItem, chunks)
+	var wg sync.WaitGroup
+
+	for i := range chunks {
+		start := i * sliceBlock
+		end := start + sliceBlock
+		if end > n {
+			end = n
+		}
+		wg.Add(1)
+		go func(idx int, chunk []string) {
+			defer wg.Done()
+			shards[idx] = scan(chunk)
+		}(i, keys[start:end])
+	}
+
+	wg.Wait()
+
+	var merged []sortItem
+	for _, s := range shards {
+		merged = append(merged, s...)
+	}
+	return merged
+}
+
 func (s *Store) Find(op filter.Operator, value string, limit int) []string {
 	db := s.DB()
 	now := time.Now().Unix()
@@ -45,15 +80,24 @@ func (s *Store) Find(op filter.Operator, value string, limit int) []string {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	var items []sortItem
-	for key, e := range db.data {
-		if e.ExpireAt != nil && *e.ExpireAt <= now {
-			continue
-		}
-		if filter.Match(e.Value, op, value) {
-			items = append(items, sortItem{display: key, ts: entryTime(e)})
-		}
+	keys := make([]string, 0, len(db.data))
+	for k := range db.data {
+		keys = append(keys, k)
 	}
+
+	items := sliceScan(keys, func(chunk []string) []sortItem {
+		var out []sortItem
+		for _, key := range chunk {
+			e := db.data[key]
+			if e.ExpireAt != nil && *e.ExpireAt <= now {
+				continue
+			}
+			if filter.Match(e.Value, op, value) {
+				out = append(out, sortItem{display: key, ts: entryTime(e)})
+			}
+		}
+		return out
+	})
 
 	return sortAndCollect(items, limit)
 }
