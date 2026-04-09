@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pardnchiu/ToriiDB/core/store/filter"
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
@@ -173,26 +174,24 @@ func (s *Store) Exec(input string) string {
 		if len(parts) < 3 {
 			return "usage: FIND <op> <value> [LIMIT <n>]"
 		}
-		op, ok := ParseFindOp(parts[1])
+		op, ok := filter.AtoOperation(parts[1])
 		if !ok {
-			return "error: operator must be eq, ne, gt, ge, lt, le, or like"
+			return "error: operator must be eq, ne, gt, gte/ge, lt, lte/le, or like"
 		}
 		tail, limit := parseLimit(parts[2:])
 		value := strings.Join(tail, " ")
 		return showList(s.Find(op, value, limit))
 
 	case "QUERY":
-		if len(parts) < 4 {
-			return "usage: QUERY <field> <op> <value> [LIMIT <n>]"
+		if len(parts) < 2 {
+			return "usage: QUERY <expression> [LIMIT <n>]"
 		}
-		field := parts[1]
-		op, ok := ParseFindOp(parts[2])
-		if !ok {
-			return "error: operator must be eq, ne, gt, ge, lt, le, or like"
+		expr, limit := extractLimitFromInfix(parts[1:])
+		f, err := filter.AtoFilter(expr)
+		if err != nil {
+			return fmt.Sprintf("error: %v", err)
 		}
-		tail, limit := parseLimit(parts[3:])
-		value := strings.Join(tail, " ")
-		return showList(s.Query(field, op, value, limit))
+		return showList(s.Query(f, limit))
 
 	case "SELECT":
 		if len(parts) != 2 {
@@ -210,6 +209,16 @@ func (s *Store) Exec(input string) string {
 	default:
 		return fmt.Sprintf("unknown: %s", cmd)
 	}
+}
+
+func extractLimitFromInfix(tokens []string) (string, int) {
+	n := len(tokens)
+	if n >= 2 && strings.ToUpper(tokens[n-2]) == "LIMIT" {
+		if v, err := strconv.Atoi(tokens[n-1]); err == nil && v > 0 {
+			return strings.Join(tokens[:n-2], " "), v
+		}
+	}
+	return strings.Join(tokens, " "), 0
 }
 
 func parseLimit(args []string) ([]string, int) {

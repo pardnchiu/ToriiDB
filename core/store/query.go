@@ -2,20 +2,12 @@ package store
 
 import (
 	"encoding/json"
-	"strings"
 	"time"
 
-	"github.com/pardnchiu/ToriiDB/core/utils"
+	"github.com/pardnchiu/ToriiDB/core/store/filter"
 )
 
-func (s *Store) Query(field string, op FindOperation, value string, limit int) []string {
-	var subKeys []string
-	for part := range strings.SplitSeq(field, ".") {
-		if part != "" {
-			subKeys = append(subKeys, part)
-		}
-	}
-
+func (s *Store) Query(filter filter.Filter, limit int) []string {
 	db := s.DB()
 	now := time.Now().Unix()
 
@@ -36,12 +28,7 @@ func (s *Store) Query(field string, op FindOperation, value string, limit int) [
 			continue
 		}
 
-		val, ok := utils.WalkKeys(obj, subKeys)
-		if !ok {
-			continue
-		}
-
-		if matchValue(utils.Vtoa(val), op, value) {
+		if filter.Match(obj) {
 			items = append(items, sortItem{display: key + ": " + e.Value, ts: entryTime(e)})
 		}
 	}
