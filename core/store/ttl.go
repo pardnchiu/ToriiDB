@@ -1,12 +1,15 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
-func (s *Store) TTL(key string) int64 {
-	e, ok := s.Get(key)
+func (c *core) TTL(key string) int64 {
+	e, ok := c.Get(key)
 	if !ok {
 		return -2
 	}
@@ -23,8 +26,8 @@ func (s *Store) TTL(key string) int64 {
 	return remaining
 }
 
-func (s *Store) Expire(key string, seconds int64) error {
-	db := s.DB()
+func (c *core) Expire(key string, seconds int64) error {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -36,11 +39,20 @@ func (s *Store) Expire(key string, seconds int64) error {
 	expireAt := time.Now().Unix() + seconds
 	e.ExpireAt = &expireAt
 
+	raw, err := json.Marshal(e)
+	if err != nil {
+		return fmt.Errorf("json.Marshal: %w", err)
+	}
+
+	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
+		return err
+	}
+
 	return db.addToAOF("EXPIRE", key, fmt.Sprintf("%d", seconds), &expireAt)
 }
 
-func (s *Store) ExpireAt(key string, timestamp int64) error {
-	db := s.DB()
+func (c *core) ExpireAt(key string, timestamp int64) error {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -51,11 +63,20 @@ func (s *Store) ExpireAt(key string, timestamp int64) error {
 
 	e.ExpireAt = &timestamp
 
+	raw, err := json.Marshal(e)
+	if err != nil {
+		return fmt.Errorf("json.Marshal: %w", err)
+	}
+
+	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
+		return err
+	}
+
 	return db.addToAOF("EXPIREAT", key, fmt.Sprintf("%d", timestamp), &timestamp)
 }
 
-func (s *Store) Persist(key string) error {
-	db := s.DB()
+func (c *core) Persist(key string) error {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -65,6 +86,15 @@ func (s *Store) Persist(key string) error {
 	}
 
 	e.ExpireAt = nil
+
+	raw, err := json.Marshal(e)
+	if err != nil {
+		return fmt.Errorf("json.Marshal: %w", err)
+	}
+
+	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
+		return err
+	}
 
 	return db.addToAOF("PERSIST", key, "", nil)
 }

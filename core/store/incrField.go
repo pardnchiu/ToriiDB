@@ -8,8 +8,8 @@ import (
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
-func (s *Store) IncrField(key string, subKeys []string, delta float64) (float64, error) {
-	db := s.DB()
+func (c *core) IncrField(key string, subKeys []string, delta float64) (float64, error) {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

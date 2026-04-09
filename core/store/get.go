@@ -7,8 +7,8 @@ import (
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
-func (s *Store) Get(key string) (*Entry, bool) {
-	db := s.DB()
+func (c *core) Get(key string) (*Entry, bool) {
+	db := c.DB()
 	db.mu.RLock()
 	e, ok := db.data[key]
 	db.mu.RUnlock()
@@ -27,8 +27,8 @@ func (s *Store) Get(key string) (*Entry, bool) {
 	return e, true
 }
 
-func (s *Store) GetField(key string, subKeys []string) (string, bool) {
-	entry, ok := s.Get(key)
+func (c *core) GetField(key string, subKeys []string) (string, bool) {
+	entry, ok := c.Get(key)
 	if !ok {
 		return "", false
 	}
@@ -50,30 +50,30 @@ func (s *Store) GetField(key string, subKeys []string) (string, bool) {
 	return utils.Vtoa(val), true
 }
 
-func (s *Store) Exist(key string) string {
-	if e, ok := s.Get(key); !ok || e == nil {
+func (c *core) Exist(key string) string {
+	if e, ok := c.Get(key); !ok || e == nil {
 		return "(integer) 0"
 	}
 	return "(integer) 1"
 }
 
-func (s *Store) ExistField(key string, subKeys []string) string {
-	if _, ok := s.GetField(key, subKeys); !ok {
+func (c *core) ExistField(key string, subKeys []string) string {
+	if _, ok := c.GetField(key, subKeys); !ok {
 		return "(integer) 0"
 	}
 	return "(integer) 1"
 }
 
-func (s *Store) Type(key string) string {
-	e, ok := s.Get(key)
+func (c *core) Type(key string) string {
+	e, ok := c.Get(key)
 	if !ok || e == nil {
 		return "(nil)"
 	}
 	return e.Type.String()
 }
 
-func (s *Store) TypeField(key string, subKeys []string) string {
-	val, ok := s.GetField(key, subKeys)
+func (c *core) TypeField(key string, subKeys []string) string {
+	val, ok := c.GetField(key, subKeys)
 	if !ok {
 		return "(nil)"
 	}

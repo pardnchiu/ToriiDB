@@ -20,9 +20,34 @@ type db struct {
 	aof  *os.File
 }
 
+type Session struct {
+	core
+}
+
+type core struct {
+	dbs *[maxDB]*db
+	db  int
+}
+
+func (c *core) DB() *db {
+	return c.dbs[c.db]
+}
+
+func (c *core) Current() int {
+	return c.db
+}
+
+func (c *core) Select(index int) error {
+	if index < 0 || index >= maxDB {
+		return fmt.Errorf("invalid db index: %d (0-%d)", index, maxDB-1)
+	}
+	c.db = index
+	return nil
+}
+
 type Store struct {
-	dbs     [maxDB]*db
-	db      int
+	allDBs [maxDB]*db
+	core
 	cleanCh chan struct{}
 }
 
@@ -44,8 +69,10 @@ func New() (*Store, error) {
 		if err != nil {
 			return nil, fmt.Errorf("db_%d: %w", i, err)
 		}
-		s.dbs[i] = d
+		s.allDBs[i] = d
 	}
+
+	s.core.dbs = &s.allDBs
 
 	go s.cleanTimer(time.Minute)
 
@@ -86,27 +113,11 @@ func (d *db) init() error {
 	return nil
 }
 
-func (s *Store) DB() *db {
-	return s.dbs[s.db]
-}
-
-func (s *Store) Current() int {
-	return s.db
-}
-
-func (s *Store) Select(index int) error {
-	if index < 0 || index >= maxDB {
-		return fmt.Errorf("invalid db index: %d (0-%d)", index, maxDB-1)
-	}
-	s.db = index
-	return nil
-}
-
 func (s *Store) Close() error {
 	s.cleanCh <- struct{}{}
 
 	var firstErr error
-	for _, d := range s.dbs {
+	for _, d := range s.allDBs {
 		if d == nil {
 			continue
 		}
@@ -120,6 +131,10 @@ func (s *Store) Close() error {
 	return firstErr
 }
 
+func (s *Store) Session() *Session {
+	return &Session{core: core{dbs: &s.allDBs, db: s.core.db}}
+}
+
 func (s *Store) cleanTimer(interval time.Duration) {
 	timer := time.NewTimer(interval)
 	defer timer.Stop()
@@ -129,7 +144,7 @@ func (s *Store) cleanTimer(interval time.Duration) {
 		case <-s.cleanCh:
 			return
 		case <-timer.C:
-			for _, d := range s.dbs {
+			for _, d := range s.allDBs {
 				d.cleanExpired()
 			}
 			timer.Reset(interval)
@@ -146,6 +161,7 @@ func (d *db) cleanExpired() {
 	for key, e := range d.data {
 		if e.ExpireAt != nil && *e.ExpireAt <= now {
 			delete(d.data, key)
+			os.Remove(d.filePath(key))
 		}
 	}
 }

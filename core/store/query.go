@@ -7,8 +7,8 @@ import (
 	"github.com/pardnchiu/ToriiDB/core/store/filter"
 )
 
-func (s *Store) Query(f filter.Filter, limit int) []string {
-	db := s.DB()
+func (c *core) Query(f filter.Filter, limit int) []string {
+	db := c.DB()
 	now := time.Now().Unix()
 
 	db.mu.RLock()

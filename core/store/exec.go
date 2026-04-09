@@ -10,7 +10,7 @@ import (
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
-func (s *Store) Exec(input string) string {
+func (c *core) Exec(input string) string {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
 		return ""
@@ -26,13 +26,13 @@ func (s *Store) Exec(input string) string {
 		key := parts[1]
 		mainKey, subKeys := splitKey(key)
 		if len(subKeys) > 0 {
-			if val, ok := s.GetField(mainKey, subKeys); ok {
+			if val, ok := c.GetField(mainKey, subKeys); ok {
 				return val
 			}
 			return "(nil)"
 		}
 
-		if e, ok := s.Get(mainKey); ok {
+		if e, ok := c.Get(mainKey); ok {
 			return e.Value
 		}
 		return "(nil)"
@@ -43,9 +43,9 @@ func (s *Store) Exec(input string) string {
 		}
 		mainKey, subKeys := splitKey(parts[1])
 		if len(subKeys) > 0 {
-			return s.ExistField(mainKey, subKeys)
+			return c.ExistField(mainKey, subKeys)
 		}
-		return s.Exist(mainKey)
+		return c.Exist(mainKey)
 
 	case "TYPE":
 		if len(parts) != 2 {
@@ -53,9 +53,9 @@ func (s *Store) Exec(input string) string {
 		}
 		mainKey, subKeys := splitKey(parts[1])
 		if len(subKeys) > 0 {
-			return s.TypeField(mainKey, subKeys)
+			return c.TypeField(mainKey, subKeys)
 		}
-		return s.Type(mainKey)
+		return c.Type(mainKey)
 
 	case "SET":
 		if len(parts) < 3 {
@@ -65,13 +65,13 @@ func (s *Store) Exec(input string) string {
 		mainKey, subKeys := splitKey(key)
 		value, flag, expireAt := parseSetArgs(parts[2:])
 		if len(subKeys) > 0 {
-			if err := s.SetField(mainKey, subKeys, value, flag, expireAt); err != nil {
+			if err := c.SetField(mainKey, subKeys, value, flag, expireAt); err != nil {
 				return "(nil)"
 			}
 			return "OK"
 		}
 
-		if err := s.Set(key, value, flag, expireAt); err != nil {
+		if err := c.Set(key, value, flag, expireAt); err != nil {
 			return "(nil)"
 		}
 		return "OK"
@@ -80,7 +80,7 @@ func (s *Store) Exec(input string) string {
 		if len(parts) != 2 {
 			return "usage: TTL <key>"
 		}
-		ttl := s.TTL(parts[1])
+		ttl := c.TTL(parts[1])
 		if ttl == -2 {
 			return "(nil)"
 		}
@@ -94,7 +94,7 @@ func (s *Store) Exec(input string) string {
 		if err != nil || sec <= 0 {
 			return "error: seconds must be a positive integer"
 		}
-		if err := s.Expire(parts[1], sec); err != nil {
+		if err := c.Expire(parts[1], sec); err != nil {
 			return "(nil)"
 		}
 		return "OK"
@@ -107,7 +107,7 @@ func (s *Store) Exec(input string) string {
 		if err != nil {
 			return "error: timestamp must be a valid integer"
 		}
-		if err := s.ExpireAt(parts[1], ts); err != nil {
+		if err := c.ExpireAt(parts[1], ts); err != nil {
 			return "(nil)"
 		}
 		return "OK"
@@ -116,7 +116,7 @@ func (s *Store) Exec(input string) string {
 		if len(parts) != 2 {
 			return "usage: PERSIST <key>"
 		}
-		if err := s.Persist(parts[1]); err != nil {
+		if err := c.Persist(parts[1]); err != nil {
 			return "(nil)"
 		}
 		return "OK"
@@ -137,9 +137,9 @@ func (s *Store) Exec(input string) string {
 		var result float64
 		var err error
 		if len(subKeys) > 0 {
-			result, err = s.IncrField(mainKey, subKeys, delta)
+			result, err = c.IncrField(mainKey, subKeys, delta)
 		} else {
-			result, err = s.Incr(mainKey, delta)
+			result, err = c.Incr(mainKey, delta)
 		}
 		if err != nil {
 			return "(nil)"
@@ -154,20 +154,20 @@ func (s *Store) Exec(input string) string {
 		if len(parts) == 2 {
 			mainKey, subKeys := splitKey(parts[1])
 			if len(subKeys) > 0 {
-				if err := s.DelField(mainKey, subKeys); err != nil {
+				if err := c.DelField(mainKey, subKeys); err != nil {
 					return "(nil)"
 				}
 				return "OK"
 			}
 		}
-		count := s.Del(parts[1:]...)
+		count := c.Del(parts[1:]...)
 		return fmt.Sprintf("(integer) %d", count)
 
 	case "KEYS":
 		if len(parts) != 2 {
 			return "usage: KEYS <pattern>"
 		}
-		keys := s.Keys(parts[1])
+		keys := c.Keys(parts[1])
 		return showList(keys)
 
 	case "FIND":
@@ -180,7 +180,7 @@ func (s *Store) Exec(input string) string {
 		}
 		tail, limit := parseLimit(parts[2:])
 		value := strings.Join(tail, " ")
-		return showList(s.Find(op, value, limit))
+		return showList(c.Find(op, value, limit))
 
 	case "QUERY":
 		if len(parts) < 2 {
@@ -191,7 +191,7 @@ func (s *Store) Exec(input string) string {
 		if err != nil {
 			return fmt.Sprintf("error: %v", err)
 		}
-		return showList(s.Query(f, limit))
+		return showList(c.Query(f, limit))
 
 	case "SELECT":
 		if len(parts) != 2 {
@@ -201,7 +201,7 @@ func (s *Store) Exec(input string) string {
 		if err != nil {
 			return "error: db index must be an integer"
 		}
-		if err := s.Select(index); err != nil {
+		if err := c.Select(index); err != nil {
 			return fmt.Sprintf("error: %v", err)
 		}
 		return "OK"

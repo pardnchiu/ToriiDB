@@ -40,8 +40,8 @@ const (
 	SetXX                     // only if exists
 )
 
-func (s *Store) Set(key, value string, flag SetFlag, expireAt *int64) error {
-	db := s.DB()
+func (c *core) Set(key, value string, flag SetFlag, expireAt *int64) error {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

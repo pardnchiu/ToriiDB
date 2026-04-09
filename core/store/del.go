@@ -9,8 +9,8 @@ import (
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
-func (s *Store) Del(keys ...string) int {
-	db := s.DB()
+func (c *core) Del(keys ...string) int {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -29,8 +29,8 @@ func (s *Store) Del(keys ...string) int {
 	return count
 }
 
-func (s *Store) DelField(key string, subKeys []string) error {
-	db := s.DB()
+func (c *core) DelField(key string, subKeys []string) error {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

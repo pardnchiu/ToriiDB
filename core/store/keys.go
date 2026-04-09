@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-func (s *Store) Keys(pattern string) []string {
-	db := s.DB()
+func (c *core) Keys(pattern string) []string {
+	db := c.DB()
 	now := time.Now().Unix()
 
 	db.mu.RLock()

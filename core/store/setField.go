@@ -9,8 +9,8 @@ import (
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
-func (s *Store) SetField(key string, subKeys []string, value string, flag SetFlag, expireAt *int64) error {
-	db := s.DB()
+func (c *core) SetField(key string, subKeys []string, value string, flag SetFlag, expireAt *int64) error {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

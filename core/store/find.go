@@ -73,8 +73,8 @@ func sliceScan(keys []string, scan func(keys []string) []sortItem) []sortItem {
 	return merged
 }
 
-func (s *Store) Find(op filter.Operator, value string, limit int) []string {
-	db := s.DB()
+func (c *core) Find(op filter.Operator, value string, limit int) []string {
+	db := c.DB()
 	now := time.Now().Unix()
 
 	db.mu.RLock()

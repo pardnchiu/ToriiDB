@@ -9,8 +9,8 @@ import (
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
 
-func (s *Store) Incr(key string, delta float64) (float64, error) {
-	db := s.DB()
+func (c *core) Incr(key string, delta float64) (float64, error) {
+	db := c.DB()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
