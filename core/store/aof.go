@@ -28,27 +28,32 @@ func (d *db) addToAOF(cmd, key, value string, expireAt *int64) error {
 		return err
 	}
 
-	if _, err := d.aof.WriteString(string(raw) + "\n"); err != nil {
+	line := append(raw, '\n')
+	n, err := d.aof.Write(line)
+	if err != nil {
 		return err
 	}
 
-	d.aofLines++
+	d.aofSize += int64(n)
 
 	if err := d.aof.Sync(); err != nil {
 		return err
 	}
 
-	live := len(d.data)
-	if live >= compactMinLiveKeys && d.aofLines >= live*compactInflationRatio {
+	baseline := d.aofSizeBaseline
+	if baseline < compactMinSize {
+		baseline = compactMinSize
+	}
+	if d.aofSize >= baseline*compactInflationRatio {
 		return d.compact()
 	}
 
 	return nil
 }
 
-func replayAOF(path string) (map[string]*Entry, int, error) {
+func replayAOF(path string) (map[string]*Entry, int64, error) {
 	data := make(map[string]*Entry)
-	lines := 0
+	var size int64
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -60,17 +65,17 @@ func replayAOF(path string) (map[string]*Entry, int, error) {
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
+		line := scanner.Bytes()
+		if len(line) == 0 {
 			continue
 		}
 
 		var record AOFRecord
-		if json.Unmarshal([]byte(line), &record) != nil {
+		if json.Unmarshal(line, &record) != nil {
 			continue
 		}
 
-		lines++
+		size += int64(len(line) + 1)
 
 		switch record.Command {
 		case "SET":
@@ -104,12 +109,12 @@ func replayAOF(path string) (map[string]*Entry, int, error) {
 		}
 	}
 
-	return data, lines, scanner.Err()
+	return data, size, scanner.Err()
 }
 
 const (
 	compactInflationRatio = 2
-	compactMinLiveKeys    = 1024
+	compactMinSize        = 1 << 20
 )
 
 func (d *db) compact() error {
@@ -122,13 +127,13 @@ func (d *db) compact() error {
 
 	if len(d.data) == 0 {
 		os.Remove(aofPath)
-		d.aofLines = 0
+		d.aofSize = 0
+		d.aofSizeBaseline = 0
 		return nil
 	}
 
 	now := time.Now().Unix()
 	var buf []byte
-	lines := 0
 
 	for _, e := range d.data {
 		if e.ExpireAt != nil && *e.ExpireAt <= now {
@@ -150,13 +155,13 @@ func (d *db) compact() error {
 
 		buf = append(buf, raw...)
 		buf = append(buf, '\n')
-		lines++
 	}
 
 	if err := utils.WriteFile(aofPath, buf, 0644); err != nil {
 		return err
 	}
 
-	d.aofLines = lines
+	d.aofSize = int64(len(buf))
+	d.aofSizeBaseline = d.aofSize
 	return nil
 }
