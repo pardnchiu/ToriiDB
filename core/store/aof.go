@@ -32,17 +32,29 @@ func (d *db) addToAOF(cmd, key, value string, expireAt *int64) error {
 		return err
 	}
 
-	return d.aof.Sync()
+	d.aofLines++
+
+	if err := d.aof.Sync(); err != nil {
+		return err
+	}
+
+	live := len(d.data)
+	if live >= compactMinLiveKeys && d.aofLines >= live*compactInflationRatio {
+		return d.compact()
+	}
+
+	return nil
 }
 
-func replayAOF(path string) (map[string]*Entry, error) {
+func replayAOF(path string) (map[string]*Entry, int, error) {
 	data := make(map[string]*Entry)
+	lines := 0
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return data, nil
+			return data, 0, nil
 		}
-		return nil, err
+		return nil, 0, err
 	}
 	defer file.Close()
 
@@ -57,6 +69,8 @@ func replayAOF(path string) (map[string]*Entry, error) {
 		if json.Unmarshal([]byte(line), &record) != nil {
 			continue
 		}
+
+		lines++
 
 		switch record.Command {
 		case "SET":
@@ -90,8 +104,13 @@ func replayAOF(path string) (map[string]*Entry, error) {
 		}
 	}
 
-	return data, scanner.Err()
+	return data, lines, scanner.Err()
 }
+
+const (
+	compactInflationRatio = 2
+	compactMinLiveKeys    = 1024
+)
 
 func (d *db) compact() error {
 	if d.aof != nil {
@@ -99,13 +118,17 @@ func (d *db) compact() error {
 		d.aof = nil
 	}
 
+	aofPath := filepath.Join(d.dir, "record.aof")
+
 	if len(d.data) == 0 {
-		os.Remove(filepath.Join(d.dir, "record.aof"))
+		os.Remove(aofPath)
+		d.aofLines = 0
 		return nil
 	}
 
 	now := time.Now().Unix()
 	var buf []byte
+	lines := 0
 
 	for _, e := range d.data {
 		if e.ExpireAt != nil && *e.ExpireAt <= now {
@@ -127,7 +150,13 @@ func (d *db) compact() error {
 
 		buf = append(buf, raw...)
 		buf = append(buf, '\n')
+		lines++
 	}
 
-	return utils.WriteFile(filepath.Join(d.dir, "record.aof"), buf, 0644)
+	if err := utils.WriteFile(aofPath, buf, 0644); err != nil {
+		return err
+	}
+
+	d.aofLines = lines
+	return nil
 }

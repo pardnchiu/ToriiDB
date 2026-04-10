@@ -15,12 +15,13 @@ const (
 )
 
 type db struct {
-	mu     sync.RWMutex
-	dir    string
-	data   map[string]*Entry
-	aof    *os.File
-	once   sync.Once
-	loaded bool
+	mu       sync.RWMutex
+	dir      string
+	data     map[string]*Entry
+	aof      *os.File
+	aofLines int
+	once     sync.Once
+	loaded   bool
 }
 
 type Session struct {
@@ -110,8 +111,9 @@ func New(path ...string) (*Store, error) {
 func (d *db) ensureLoaded() {
 	d.once.Do(func() {
 		aofPath := filepath.Join(d.dir, "record.aof")
-		if data, err := replayAOF(aofPath); err == nil {
+		if data, lines, err := replayAOF(aofPath); err == nil {
 			d.data = data
+			d.aofLines = lines
 		}
 		d.loaded = true
 	})
