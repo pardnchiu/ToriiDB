@@ -29,7 +29,7 @@ func (c *core) SetField(key string, subKeys []string, value string, flag SetFlag
 
 	var obj map[string]any
 	if ok && oldVal.Type == TypeJSON {
-		if cached, cok := oldVal.parseCached(); cok {
+		if cached, cok := oldVal.parseAndCache(); cok {
 			if m, mok := cached.(map[string]any); mok {
 				obj = m
 			} else {

@@ -59,7 +59,7 @@ func (e *Entry) JSON() ([]byte, error) {
 	})
 }
 
-func (e *Entry) parseCached() (any, bool) {
+func (e *Entry) parseAndCache() (any, bool) {
 	if e.Type != TypeJSON {
 		return nil, false
 	}
@@ -72,6 +72,13 @@ func (e *Entry) parseCached() (any, bool) {
 	}
 	e.parsed = obj
 	return obj, true
+}
+
+func (e *Entry) cached() (any, bool) {
+	if e.Type != TypeJSON || e.parsed == nil {
+		return nil, false
+	}
+	return e.parsed, true
 }
 
 func (e *Entry) setParsed(obj any) error {
@@ -131,7 +138,7 @@ func (c *core) Set(key, value string, flag SetFlag, expireAt *int64) error {
 	}
 
 	if vType == TypeJSON {
-		entry.parseCached()
+		entry.parseAndCache()
 	}
 
 	raw, err := entry.JSON()

@@ -27,12 +27,19 @@ func (c *core) Get(key string) (*Entry, bool) {
 }
 
 func (c *core) GetField(key string, subKeys []string) (string, bool) {
-	entry, ok := c.Get(key)
+	db := c.DB()
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	entry, ok := db.data[key]
 	if !ok {
 		return "", false
 	}
+	if entry.ExpireAt != nil && *entry.ExpireAt <= time.Now().Unix() {
+		return "", false
+	}
 
-	obj, ok := entry.parseCached()
+	obj, ok := entry.cached()
 	if !ok {
 		return "", false
 	}

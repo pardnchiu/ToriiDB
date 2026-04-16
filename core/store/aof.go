@@ -97,7 +97,7 @@ func replayAOF(path string) (map[string]*Entry, int64, error) {
 			}
 			if vType == TypeJSON {
 				if e, ok := data[record.Key]; ok {
-					e.parseCached()
+					e.parseAndCache()
 				}
 			}
 

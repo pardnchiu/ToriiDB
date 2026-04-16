@@ -41,7 +41,7 @@ func (c *core) DelField(key string, subKeys []string) error {
 		return fmt.Errorf("not JSON type")
 	}
 
-	cached, cok := entry.parseCached()
+	cached, cok := entry.parseAndCache()
 	if !cok {
 		return fmt.Errorf("json.Unmarshal failed")
 	}

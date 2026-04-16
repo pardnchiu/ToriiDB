@@ -20,7 +20,7 @@ func (c *core) IncrField(key string, subKeys []string, delta float64) (float64, 
 		return 0, fmt.Errorf("not JSON type")
 	}
 
-	cached, cok := entry.parseCached()
+	cached, cok := entry.parseAndCache()
 	if !cok {
 		return 0, fmt.Errorf("json.Unmarshal failed")
 	}

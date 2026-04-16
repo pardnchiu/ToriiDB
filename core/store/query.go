@@ -25,7 +25,7 @@ func (c *core) Query(f filter.Filter, limit int) []string {
 			if e.ExpireAt != nil && *e.ExpireAt <= now {
 				continue
 			}
-			obj, ok := e.parseCached()
+			obj, ok := e.cached()
 			if !ok {
 				continue
 			}
