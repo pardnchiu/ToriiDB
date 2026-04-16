@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -42,33 +41,34 @@ func (c *core) DelField(key string, subKeys []string) error {
 		return fmt.Errorf("not JSON type")
 	}
 
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(entry.Value), &obj); err != nil {
-		return fmt.Errorf("json.Unmarshal: %w", err)
+	cached, cok := entry.parseCached()
+	if !cok {
+		return fmt.Errorf("json.Unmarshal failed")
+	}
+	obj, mok := cached.(map[string]any)
+	if !mok {
+		return fmt.Errorf("not a JSON object")
 	}
 
 	if err := walkKeysAndSet(obj, subKeys, nil); err != nil {
 		return fmt.Errorf("walkKeysAndSet: %w", err)
 	}
 
-	raw, err := json.Marshal(obj)
-	if err != nil {
+	if err := entry.setParsed(obj); err != nil {
 		return fmt.Errorf("json.Marshal: %w", err)
 	}
 
 	now := time.Now().Unix()
-	newVal := string(raw)
-	entry.Value = newVal
 	entry.UpdatedAt = &now
 
-	entryRaw, err := json.Marshal(entry)
+	entryRaw, err := entry.JSON()
 	if err != nil {
-		return fmt.Errorf("json.Marshal: %w", err)
+		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
 	if err := utils.WriteFile(db.filePath(key), entryRaw, 0644); err != nil {
 		return err
 	}
 
-	return db.addToAOF("SET", key, newVal, entry.ExpireAt)
+	return db.addToAOF("SET", key, entry.Value(), entry.ExpireAt)
 }

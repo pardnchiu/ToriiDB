@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/pardnchiu/ToriiDB/core/store/filter"
@@ -26,17 +25,13 @@ func (c *core) Query(f filter.Filter, limit int) []string {
 			if e.ExpireAt != nil && *e.ExpireAt <= now {
 				continue
 			}
-			if e.Type != TypeJSON {
-				continue
-			}
-
-			var obj any
-			if err := json.Unmarshal([]byte(e.Value), &obj); err != nil {
+			obj, ok := e.parseCached()
+			if !ok {
 				continue
 			}
 
 			if f.Match(obj) {
-				out = append(out, sortItem{display: key + ": " + e.Value, ts: entryTime(e)})
+				out = append(out, sortItem{display: key + ": " + e.Value(), ts: entryTime(e)})
 			}
 		}
 		return out

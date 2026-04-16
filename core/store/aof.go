@@ -79,18 +79,25 @@ func replayAOF(path string) (map[string]*Entry, int64, error) {
 
 		switch record.Command {
 		case "SET":
+			vType := detectType(record.Value)
 			if e, ok := data[record.Key]; ok {
-				e.Value = record.Value
-				e.Type = detectType(record.Value)
+				e.setValue(record.Value)
+				e.Type = vType
 				e.UpdatedAt = &record.Timestamp
 				e.ExpireAt = record.ExpireAt
 			} else {
-				data[record.Key] = &Entry{
+				e := &Entry{
 					Key:       record.Key,
-					Value:     record.Value,
-					Type:      detectType(record.Value),
+					Type:      vType,
 					CreatedAt: record.Timestamp,
 					ExpireAt:  record.ExpireAt,
+				}
+				e.setValue(record.Value)
+				data[record.Key] = e
+			}
+			if vType == TypeJSON {
+				if e, ok := data[record.Key]; ok {
+					e.parseCached()
 				}
 			}
 
@@ -144,7 +151,7 @@ func (d *db) compact() error {
 			Timestamp: e.CreatedAt,
 			Command:   "SET",
 			Key:       e.Key,
-			Value:     e.Value,
+			Value:     e.Value(),
 			ExpireAt:  e.ExpireAt,
 		}
 

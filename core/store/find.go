@@ -92,7 +92,7 @@ func (c *core) Find(op filter.Operator, value string, limit int) []string {
 			if e.ExpireAt != nil && *e.ExpireAt <= now {
 				continue
 			}
-			if filter.Match(e.Value, op, value) {
+			if filter.Match(e.Value(), op, value) {
 				out = append(out, sortItem{display: key, ts: entryTime(e)})
 			}
 		}

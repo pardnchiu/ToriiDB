@@ -28,6 +28,14 @@
 
 ## 已完成功能
 
+### 2026-04-16
+
+- `Entry.value` 私有化，所有讀寫強制走 `Value()` / `setValue()` / `setParsed()`，編譯期防止快取不一致
+- JSON entry 寫入時同步快取已解析物件，讀取與查詢路徑直接取用快取，省去重複 `json.Unmarshal`
+- 所有寫檔路徑統一改用 `entry.JSON()`，取代 `json.Marshal(entry)`
+- 新增 `query_test.go` 覆蓋 Query 核心路徑（單一條件、AND/OR/NOT、複合表達式、巢狀欄位、LIMIT）
+- 新增 `find_bench_test.go` 效能測試（Find / Query / 複合 Query，100–10000 筆）
+
 ### 2026-04-10
 
 - 抽離 `core` 結構體，命令方法由 `Store` 與 `Session` 共用
@@ -129,7 +137,7 @@ s.Set("token:abc", "session_data", store.SetDefault, &exp)
 // 讀取
 entry, ok := s.Get("user:1")
 if ok {
-    fmt.Println(entry.Value) // {"name":"Alice","age":25}
+    fmt.Println(entry.Value()) // {"name":"Alice","age":25}
     fmt.Println(entry.Type)  // json
 }
 

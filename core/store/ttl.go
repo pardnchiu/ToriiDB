@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -39,9 +38,9 @@ func (c *core) Expire(key string, seconds int64) error {
 	expireAt := time.Now().Unix() + seconds
 	e.ExpireAt = &expireAt
 
-	raw, err := json.Marshal(e)
+	raw, err := e.JSON()
 	if err != nil {
-		return fmt.Errorf("json.Marshal: %w", err)
+		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
 	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
@@ -63,9 +62,9 @@ func (c *core) ExpireAt(key string, timestamp int64) error {
 
 	e.ExpireAt = &timestamp
 
-	raw, err := json.Marshal(e)
+	raw, err := e.JSON()
 	if err != nil {
-		return fmt.Errorf("json.Marshal: %w", err)
+		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
 	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
@@ -87,9 +86,9 @@ func (c *core) Persist(key string) error {
 
 	e.ExpireAt = nil
 
-	raw, err := json.Marshal(e)
+	raw, err := e.JSON()
 	if err != nil {
-		return fmt.Errorf("json.Marshal: %w", err)
+		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
 	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {

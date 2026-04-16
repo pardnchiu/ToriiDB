@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/pardnchiu/ToriiDB/core/utils"
@@ -33,12 +32,8 @@ func (c *core) GetField(key string, subKeys []string) (string, bool) {
 		return "", false
 	}
 
-	if entry.Type != TypeJSON {
-		return "", false
-	}
-
-	var obj any
-	if err := json.Unmarshal([]byte(entry.Value), &obj); err != nil {
+	obj, ok := entry.parseCached()
+	if !ok {
 		return "", false
 	}
 

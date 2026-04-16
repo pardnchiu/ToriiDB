@@ -33,7 +33,7 @@ func (c *core) Exec(input string) string {
 		}
 
 		if e, ok := c.Get(mainKey); ok {
-			return e.Value
+			return e.Value()
 		}
 		return "(nil)"
 

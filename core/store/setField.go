@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -30,14 +29,18 @@ func (c *core) SetField(key string, subKeys []string, value string, flag SetFlag
 
 	var obj map[string]any
 	if ok && oldVal.Type == TypeJSON {
-		// * value is json
-		if err := json.Unmarshal([]byte(oldVal.Value), &obj); err != nil {
+		if cached, cok := oldVal.parseCached(); cok {
+			if m, mok := cached.(map[string]any); mok {
+				obj = m
+			} else {
+				obj = make(map[string]any)
+			}
+		} else {
 			obj = make(map[string]any)
 		}
 	} else if ok {
 		return fmt.Errorf("not JSON type")
 	} else {
-		// * value not exist, create new
 		obj = make(map[string]any)
 	}
 
@@ -45,15 +48,11 @@ func (c *core) SetField(key string, subKeys []string, value string, flag SetFlag
 		return fmt.Errorf("walkKeysAndSet: %w", err)
 	}
 
-	raw, err := json.Marshal(obj)
-	if err != nil {
-		return fmt.Errorf("json.Marshal: %w", err)
-	}
-
-	newVal := string(raw)
 	var entry *Entry
 	if ok {
-		oldVal.Value = newVal
+		if err := oldVal.setParsed(obj); err != nil {
+			return fmt.Errorf("oldVal.setParsed: %w", err)
+		}
 		oldVal.Type = TypeJSON
 		oldVal.UpdatedAt = &now
 		if expireAt != nil {
@@ -63,24 +62,26 @@ func (c *core) SetField(key string, subKeys []string, value string, flag SetFlag
 	} else {
 		entry = &Entry{
 			Key:       key,
-			Value:     newVal,
 			Type:      TypeJSON,
 			CreatedAt: now,
 			ExpireAt:  expireAt,
 		}
+		if err := entry.setParsed(obj); err != nil {
+			return fmt.Errorf("entry.setParsed: %w", err)
+		}
 		db.data[key] = entry
 	}
 
-	entryRaw, err := json.Marshal(entry)
+	entryRaw, err := entry.JSON()
 	if err != nil {
-		return fmt.Errorf("json.Marshal: %w", err)
+		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
 	if err := utils.WriteFile(db.filePath(key), entryRaw, 0644); err != nil {
 		return err
 	}
 
-	return db.addToAOF("SET", key, newVal, expireAt)
+	return db.addToAOF("SET", key, entry.Value(), expireAt)
 }
 
 func walkKeysAndSet(obj map[string]any, fields []string, value any) error {

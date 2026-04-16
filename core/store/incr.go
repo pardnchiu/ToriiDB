@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -25,27 +24,27 @@ func (c *core) Incr(key string, delta float64) (float64, error) {
 		return 0, fmt.Errorf("not number type")
 	}
 
-	num, err := strconv.ParseFloat(entry.Value, 64)
+	num, err := strconv.ParseFloat(entry.Value(), 64)
 	if err != nil {
 		return 0, fmt.Errorf("strconv.ParseFloat: %w", err)
 	}
 
 	result := num + delta
 	now := time.Now().Unix()
-	entry.Value = utils.Vtoa(result)
-	entry.Type = detectType(entry.Value)
+	entry.setValue(utils.Vtoa(result))
+	entry.Type = detectType(entry.Value())
 	entry.UpdatedAt = &now
 
-	raw, err := json.Marshal(entry)
+	raw, err := entry.JSON()
 	if err != nil {
-		return 0, fmt.Errorf("json.Marshal: %w", err)
+		return 0, fmt.Errorf("entry.JSON: %w", err)
 	}
 
 	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
 		return 0, err
 	}
 
-	if err := db.addToAOF("SET", key, entry.Value, entry.ExpireAt); err != nil {
+	if err := db.addToAOF("SET", key, entry.Value(), entry.ExpireAt); err != nil {
 		return 0, err
 	}
 

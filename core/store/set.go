@@ -24,12 +24,64 @@ const (
 )
 
 type Entry struct {
-	Key       string    `json:"key"`
-	Value     string    `json:"value"`
+	Key       string `json:"key"`
+	value     string
 	Type      ValueType `json:"type"`
 	CreatedAt int64     `json:"created_at"`
 	UpdatedAt *int64    `json:"updated_at,omitempty"`
 	ExpireAt  *int64    `json:"expire_at,omitempty"`
+	parsed    any
+}
+
+func (e *Entry) Value() string { return e.value }
+
+func (e *Entry) setValue(v string) {
+	e.value = v
+	e.parsed = nil
+}
+
+func (e *Entry) JSON() ([]byte, error) {
+	type data struct {
+		Key       string    `json:"key"`
+		Value     string    `json:"value"`
+		Type      ValueType `json:"type"`
+		CreatedAt int64     `json:"created_at"`
+		UpdatedAt *int64    `json:"updated_at,omitempty"`
+		ExpireAt  *int64    `json:"expire_at,omitempty"`
+	}
+	return json.Marshal(data{
+		Key:       e.Key,
+		Value:     e.value,
+		Type:      e.Type,
+		CreatedAt: e.CreatedAt,
+		UpdatedAt: e.UpdatedAt,
+		ExpireAt:  e.ExpireAt,
+	})
+}
+
+func (e *Entry) parseCached() (any, bool) {
+	if e.Type != TypeJSON {
+		return nil, false
+	}
+	if e.parsed != nil {
+		return e.parsed, true
+	}
+	var obj any
+	if json.Unmarshal([]byte(e.value), &obj) != nil {
+		return nil, false
+	}
+	e.parsed = obj
+	return obj, true
+}
+
+func (e *Entry) setParsed(obj any) error {
+	raw, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	e.value = string(raw)
+	e.parsed = obj
+	return nil
 }
 
 type SetFlag int
@@ -60,26 +112,31 @@ func (c *core) Set(key, value string, flag SetFlag, expireAt *int64) error {
 	}
 
 	var entry *Entry
+	vType := detectType(value)
 	if ok {
-		existing.Value = value
-		existing.Type = detectType(value)
+		existing.setValue(value)
+		existing.Type = vType
 		existing.UpdatedAt = &now
 		existing.ExpireAt = expireAt
 		entry = existing
 	} else {
 		entry = &Entry{
 			Key:       key,
-			Value:     value,
-			Type:      detectType(value),
+			Type:      vType,
 			CreatedAt: now,
 			ExpireAt:  expireAt,
 		}
+		entry.setValue(value)
 		db.data[key] = entry
 	}
 
-	raw, err := json.Marshal(entry)
+	if vType == TypeJSON {
+		entry.parseCached()
+	}
+
+	raw, err := entry.JSON()
 	if err != nil {
-		return fmt.Errorf("json.Marshalz: %w", err)
+		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
 	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
