@@ -23,6 +23,7 @@
 - [功能特點](#功能特點)
 - [架構](#架構)
 - [檔案結構](#檔案結構)
+- [版本歷程](#版本歷程)
 - [授權](#授權)
 - [Author](#author)
 - [Stars](#stars)
@@ -126,6 +127,20 @@ ToriiDB/
 ├── Makefile
 └── README.md
 ```
+
+## 版本歷程
+
+| 版本 | 日期 | 重點 |
+|------|------|------|
+| 未發佈 | 2026-04-18 | 新增 `core/openai` embedding client 套件（singleton + godotenv 自動載入），含單元測試與 network 整合測試 |
+| v0.4.4 | 2026-04-16 | `Entry` 加入 parsed JSON 快取，消除熱路徑重複 `Unmarshal`；讀寫 API 拆分（split-lock） |
+| v0.4.3 | 2026-04-10 | AOF compaction 觸發條件由行數改為 byte size，下限 1MB |
+| v0.4.2 | 2026-04-10 | AOF 膨脹率達 2x 時觸發 inline compaction |
+| v0.4.1 | 2026-04-10 | 抽離 `core` struct 支援 `Session`、lazy DB replay、平行 compaction、自訂儲存路徑 |
+| v0.4.0 | 2026-04-09 | 新增 NE 運算子，抽離 `filter` 套件並提供 infix 表達式解析（AND/OR/NOT）、並發切塊掃描 |
+| v0.3.0 | 2026-04-08 | FIND / QUERY 指令，支援 EQ/GT/GE/LT/LE/LIKE、LIMIT 與時間排序 |
+| v0.2.0 | 2026-04-08 | Document 欄位操作（GetField/SetField/DelField）、KEYS glob 匹配、INCR 支援 dot-notation 巢狀欄位 |
+| v0.1.0 | 2026-04-08 | 初始版本 — REPL、KV 指令（SET/GET/DEL/EXIST/TYPE）、AOF 持久化、TTL、16 資料庫（DB 0-15） |
 
 ## 授權
 

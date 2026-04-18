@@ -23,6 +23,7 @@
 - [Features](#features)
 - [Architecture](#architecture)
 - [File Structure](#file-structure)
+- [Version History](#version-history)
 - [License](#license)
 - [Author](#author)
 - [Stars](#stars)
@@ -126,6 +127,20 @@ ToriiDB/
 ├── Makefile
 └── README.md
 ```
+
+## Version History
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| unreleased | 2026-04-18 | `core/openai` embedding client package (singleton + godotenv auto-load), with unit and network integration tests |
+| v0.4.4 | 2026-04-16 | Parsed JSON cache in `Entry` to eliminate repeated `Unmarshal` on hot paths; split-lock read/write APIs |
+| v0.4.3 | 2026-04-10 | AOF compaction switched from line count to byte size with 1MB floor |
+| v0.4.2 | 2026-04-10 | Inline AOF compaction triggered when inflation ratio exceeds 2x |
+| v0.4.1 | 2026-04-10 | Shared `core` struct enabling `Session`, lazy DB replay, parallel compaction, custom storage path |
+| v0.4.0 | 2026-04-09 | NE operator, dedicated `filter` package with infix expression parser (AND/OR/NOT), concurrent slice scan |
+| v0.3.0 | 2026-04-08 | FIND / QUERY commands with EQ/GT/GE/LT/LE/LIKE operators, LIMIT clause, time-based sorting |
+| v0.2.0 | 2026-04-08 | Document field ops (GetField/SetField/DelField), KEYS glob matching, INCR with dot-notation nested fields |
+| v0.1.0 | 2026-04-08 | Initial release — REPL, KV commands (SET/GET/DEL/EXIST/TYPE), AOF persistence, TTL, 16 databases (DB 0-15) |
 
 ## License
 
