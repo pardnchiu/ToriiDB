@@ -204,6 +204,20 @@ func (c *core) Exec(input string) string {
 		}
 		return showList(c.Query(f, limit))
 
+	case "VSEARCH":
+		if len(parts) < 2 {
+			return "usage: VSEARCH <text> [MATCH <pattern>] [LIMIT <n>]"
+		}
+		text, pattern, limit := parseVSearchArgs(parts[1:])
+		if strings.TrimSpace(text) == "" {
+			return "usage: VSEARCH <text> [MATCH <pattern>] [LIMIT <n>]"
+		}
+		keys, err := c.VSearch(context.Background(), text, pattern, limit)
+		if err != nil {
+			return fmt.Sprintf("error: %v", err)
+		}
+		return showList(keys)
+
 	case "SELECT":
 		if len(parts) != 2 {
 			return "usage: SELECT <db> (0-15)"
@@ -240,6 +254,36 @@ func parseLimit(args []string) ([]string, int) {
 		}
 	}
 	return args, 0
+}
+
+func parseVSearchArgs(args []string) (string, string, int) {
+	pattern := ""
+	limit := 0
+	end := len(args)
+
+	for {
+		peeled := false
+
+		if end >= 2 && strings.ToUpper(args[end-2]) == "LIMIT" {
+			if v, err := strconv.Atoi(args[end-1]); err == nil && v > 0 {
+				limit = v
+				end -= 2
+				peeled = true
+			}
+		}
+
+		if end >= 2 && strings.ToUpper(args[end-2]) == "MATCH" {
+			pattern = args[end-1]
+			end -= 2
+			peeled = true
+		}
+
+		if !peeled {
+			break
+		}
+	}
+
+	return strings.Join(args[:end], " "), pattern, limit
 }
 
 func parseSetArgs(args []string) (string, SetFlag, *int64, bool) {
