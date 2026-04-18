@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -217,6 +219,33 @@ func (c *core) Exec(input string) string {
 			return fmt.Sprintf("error: %v", err)
 		}
 		return showList(keys)
+
+	case "VSIM":
+		if len(parts) != 3 {
+			return "usage: VSIM <key1> <key2>"
+		}
+		score, err := c.VSim(parts[1], parts[2])
+		if err != nil {
+			if errors.Is(err, errVectorMissing) {
+				return "(nil)"
+			}
+			return fmt.Sprintf("error: %v", err)
+		}
+		return fmt.Sprintf("(float) %s", strconv.FormatFloat(score, 'f', -1, 64))
+
+	case "VGET":
+		if len(parts) != 2 {
+			return "usage: VGET <key>"
+		}
+		vec, ok := c.VGet(parts[1])
+		if !ok {
+			return "(nil)"
+		}
+		raw, err := json.Marshal(vec)
+		if err != nil {
+			return fmt.Sprintf("error: %v", err)
+		}
+		return string(raw)
 
 	case "SELECT":
 		if len(parts) != 2 {
