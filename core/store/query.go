@@ -15,6 +15,9 @@ func (c *core) Query(f filter.Filter, limit int) []string {
 
 	keys := make([]string, 0, len(db.data))
 	for k := range db.data {
+		if isInternal(k) {
+			continue
+		}
 		keys = append(keys, k)
 	}
 

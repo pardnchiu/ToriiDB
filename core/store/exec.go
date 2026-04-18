@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -59,14 +60,24 @@ func (c *core) Exec(input string) string {
 
 	case "SET":
 		if len(parts) < 3 {
-			return "usage: SET <key> <value> [NX|XX] [<seconds>]"
+			return "usage: SET <key> <value> [NX|XX] [<seconds>] [VECTOR]"
 		}
 		key := parts[1]
 		mainKey, subKeys := splitKey(key)
-		value, flag, expireAt := parseSetArgs(parts[2:])
+		value, flag, expireAt, vector := parseSetArgs(parts[2:])
 		if len(subKeys) > 0 {
+			if vector {
+				return "error: VECTOR not supported on field-level SET"
+			}
 			if err := c.SetField(mainKey, subKeys, value, flag, expireAt); err != nil {
 				return "(nil)"
+			}
+			return "OK"
+		}
+
+		if vector {
+			if err := c.SetVector(context.Background(), key, value, flag, expireAt); err != nil {
+				return fmt.Sprintf("error: %v", err)
 			}
 			return "OK"
 		}
@@ -231,10 +242,16 @@ func parseLimit(args []string) ([]string, int) {
 	return args, 0
 }
 
-func parseSetArgs(args []string) (string, SetFlag, *int64) {
+func parseSetArgs(args []string) (string, SetFlag, *int64, bool) {
 	flag := SetDefault
 	var expireAt *int64
+	vector := false
 	end := len(args)
+
+	if end >= 2 && strings.ToUpper(args[end-1]) == "VECTOR" {
+		vector = true
+		end--
+	}
 
 	if end >= 2 {
 		sec, err := strconv.ParseInt(args[end-1], 10, 64)
@@ -256,7 +273,7 @@ func parseSetArgs(args []string) (string, SetFlag, *int64) {
 		}
 	}
 
-	return strings.Join(args[:end], " "), flag, expireAt
+	return strings.Join(args[:end], " "), flag, expireAt, vector
 }
 
 func splitKey(key string) (string, []string) {

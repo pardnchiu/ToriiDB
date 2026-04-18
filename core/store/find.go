@@ -82,6 +82,9 @@ func (c *core) Find(op filter.Operator, value string, limit int) []string {
 
 	keys := make([]string, 0, len(db.data))
 	for k := range db.data {
+		if isInternal(k) {
+			continue
+		}
 		keys = append(keys, k)
 	}
 

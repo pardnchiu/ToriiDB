@@ -1,8 +1,10 @@
 package store
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -11,6 +13,8 @@ import (
 
 	"github.com/pardnchiu/ToriiDB/core/utils"
 )
+
+var errEmbedderNotConfigured = errors.New("OPENAI_API_KEY not set; vector operations disabled")
 
 type ValueType int
 
@@ -30,6 +34,7 @@ type Entry struct {
 	CreatedAt int64     `json:"created_at"`
 	UpdatedAt *int64    `json:"updated_at,omitempty"`
 	ExpireAt  *int64    `json:"expire_at,omitempty"`
+	Vector    []float32 `json:"vector,omitempty"`
 	parsed    any
 }
 
@@ -48,6 +53,7 @@ func (e *Entry) JSON() ([]byte, error) {
 		CreatedAt int64     `json:"created_at"`
 		UpdatedAt *int64    `json:"updated_at,omitempty"`
 		ExpireAt  *int64    `json:"expire_at,omitempty"`
+		Vector    []float32 `json:"vector,omitempty"`
 	}
 	return json.Marshal(data{
 		Key:       e.Key,
@@ -56,6 +62,7 @@ func (e *Entry) JSON() ([]byte, error) {
 		CreatedAt: e.CreatedAt,
 		UpdatedAt: e.UpdatedAt,
 		ExpireAt:  e.ExpireAt,
+		Vector:    e.Vector,
 	})
 }
 
@@ -125,6 +132,7 @@ func (c *core) Set(key, value string, flag SetFlag, expireAt *int64) error {
 		existing.Type = vType
 		existing.UpdatedAt = &now
 		existing.ExpireAt = expireAt
+		existing.Vector = nil
 		entry = existing
 	} else {
 		entry = &Entry{
@@ -151,6 +159,82 @@ func (c *core) Set(key, value string, flag SetFlag, expireAt *int64) error {
 	}
 
 	return db.addToAOF("SET", key, value, expireAt)
+}
+
+func (c *core) SetVector(ctx context.Context, key, value string, flag SetFlag, expireAt *int64) error {
+	if c.embedder == nil {
+		return errEmbedderNotConfigured
+	}
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("vector text is empty")
+	}
+
+	if err := c.Set(key, value, flag, expireAt); err != nil {
+		return err
+	}
+
+	dbIdx := c.db
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.attachVectorBG(dbIdx, key, value)
+	}()
+	return nil
+}
+
+func (c *core) attachVectorBG(dbIdx int, key, text string) {
+	if c.embedder == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancel()
+
+	d := c.dbs[dbIdx]
+	d.ensureLoaded()
+	model := c.embedder.model
+	dim := c.embedder.dim
+
+	d.mu.RLock()
+	if vec, ok := d.getVector(model, dim, text); ok {
+		d.mu.RUnlock()
+		c.writeVectorToEntry(d, key, text, vec)
+		return
+	}
+	d.mu.RUnlock()
+
+	vec, err := c.embedder.embed(ctx, text)
+	if err != nil {
+		return
+	}
+
+	d.mu.Lock()
+	_ = d.putVector(model, dim, text, vec)
+	d.mu.Unlock()
+
+	c.writeVectorToEntry(d, key, text, vec)
+}
+
+func (c *core) writeVectorToEntry(d *db, key, text string, vec []float32) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	entry, ok := d.data[key]
+	if !ok {
+		return
+	}
+	if entry.Value() != text {
+		return
+	}
+
+	entry.Vector = vec
+
+	raw, err := entry.JSON()
+	if err != nil {
+		return
+	}
+	_ = utils.WriteFile(d.filePath(key), raw, 0644)
+	_ = d.addToAOFWithVector("SET", key, entry.Value(), entry.ExpireAt, vec)
 }
 
 // * use redis-fallback 3 layers store

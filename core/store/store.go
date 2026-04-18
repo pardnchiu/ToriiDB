@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/pardnchiu/ToriiDB/core/openai"
 )
 
 const (
@@ -25,13 +27,21 @@ type db struct {
 	loaded          bool
 }
 
+type embedder struct {
+	embed func(ctx context.Context, text string) ([]float32, error)
+	dim   int
+	model string
+}
+
 type Session struct {
 	core
 }
 
 type core struct {
-	dbs *[maxDB]*db
-	db  int
+	dbs      *[maxDB]*db
+	db       int
+	embedder *embedder
+	wg       *sync.WaitGroup
 }
 
 func (c *core) DB() *db {
@@ -56,14 +66,16 @@ type Store struct {
 	allDBs [maxDB]*db
 	core
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 type AOFRecord struct {
-	Timestamp int64  `json:"ts"`
-	Command   string `json:"cmd"`
-	Key       string `json:"key"`
-	Value     string `json:"value,omitempty"`
-	ExpireAt  *int64 `json:"expire_at,omitempty"`
+	Timestamp int64   `json:"ts"`
+	Command   string  `json:"cmd"`
+	Key       string  `json:"key"`
+	Value     string  `json:"value,omitempty"`
+	ExpireAt  *int64  `json:"expire_at,omitempty"`
+	Vector    *string `json:"vector,omitempty"`
 }
 
 func New(path ...string) (*Store, error) {
@@ -103,6 +115,14 @@ func New(path ...string) (*Store, error) {
 	}
 
 	s.core.dbs = &s.allDBs
+	s.core.wg = &s.wg
+	if client, err := openai.New(); err == nil {
+		s.core.embedder = &embedder{
+			embed: client.Embed,
+			dim:   client.Dim,
+			model: client.Model,
+		}
+	}
 
 	go s.cleanTimer(ctx, time.Minute)
 
@@ -141,6 +161,7 @@ func (d *db) init() error {
 }
 
 func (s *Store) Close() error {
+	s.wg.Wait()
 	s.cancel()
 
 	errs := make(chan error, maxDB)
@@ -173,7 +194,12 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) Session() *Session {
-	return &Session{core: core{dbs: &s.allDBs, db: s.core.db}}
+	return &Session{core: core{
+		dbs:      &s.allDBs,
+		db:       s.core.db,
+		embedder: s.core.embedder,
+		wg:       s.core.wg,
+	}}
 }
 
 func (s *Store) cleanTimer(ctx context.Context, interval time.Duration) {

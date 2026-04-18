@@ -11,16 +11,34 @@ import (
 )
 
 func (d *db) addToAOF(cmd, key, value string, expireAt *int64) error {
-	if err := d.init(); err != nil {
-		return err
-	}
-
-	record := AOFRecord{
+	return d.writeAOF(AOFRecord{
 		Timestamp: time.Now().Unix(),
 		Command:   cmd,
 		Key:       key,
 		Value:     value,
 		ExpireAt:  expireAt,
+	})
+}
+
+func (d *db) addToAOFWithVector(cmd, key, value string, expireAt *int64, vec []float32) error {
+	var vecPtr *string
+	if len(vec) > 0 {
+		encoded := encodeVector(vec)
+		vecPtr = &encoded
+	}
+	return d.writeAOF(AOFRecord{
+		Timestamp: time.Now().Unix(),
+		Command:   cmd,
+		Key:       key,
+		Value:     value,
+		ExpireAt:  expireAt,
+		Vector:    vecPtr,
+	})
+}
+
+func (d *db) writeAOF(record AOFRecord) error {
+	if err := d.init(); err != nil {
+		return err
 	}
 
 	raw, err := json.Marshal(record)
@@ -80,17 +98,28 @@ func replayAOF(path string) (map[string]*Entry, int64, error) {
 		switch record.Command {
 		case "SET":
 			vType := detectType(record.Value)
+			var vec []float32
+			if record.Vector != nil {
+				decoded, err := decodeVector(*record.Vector)
+				if err != nil {
+					continue
+				}
+				vec = decoded
+			}
+
 			if e, ok := data[record.Key]; ok {
 				e.setValue(record.Value)
 				e.Type = vType
 				e.UpdatedAt = &record.Timestamp
 				e.ExpireAt = record.ExpireAt
+				e.Vector = vec
 			} else {
 				e := &Entry{
 					Key:       record.Key,
 					Type:      vType,
 					CreatedAt: record.Timestamp,
 					ExpireAt:  record.ExpireAt,
+					Vector:    vec,
 				}
 				e.setValue(record.Value)
 				data[record.Key] = e
@@ -147,12 +176,19 @@ func (d *db) compact() error {
 			continue
 		}
 
+		var vector *string
+		if len(e.Vector) > 0 {
+			encoded := encodeVector(e.Vector)
+			vector = &encoded
+		}
+
 		record := AOFRecord{
 			Timestamp: e.CreatedAt,
 			Command:   "SET",
 			Key:       e.Key,
 			Value:     e.Value(),
 			ExpireAt:  e.ExpireAt,
+			Vector:    vector,
 		}
 
 		raw, err := json.Marshal(record)

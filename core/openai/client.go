@@ -26,6 +26,7 @@ const (
 type Client struct {
 	APIKey string
 	Dim    int
+	Model  string
 	http   *http.Client
 }
 
@@ -65,6 +66,7 @@ func New() (*Client, error) {
 		instance = &Client{
 			APIKey: apiKey,
 			Dim:    dim,
+			Model:  defaultModel,
 			http:   &http.Client{Timeout: timeout},
 		}
 	})
@@ -78,7 +80,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 
 	body := request{
 		Input:          text,
-		Model:          defaultModel,
+		Model:          c.Model,
 		Dimensions:     c.Dim,
 		EncodingFormat: "float",
 	}

@@ -15,6 +15,9 @@ func (c *core) Keys(pattern string) []string {
 
 	var result []string
 	for key, e := range db.data {
+		if isInternal(key) {
+			continue
+		}
 		if e.ExpireAt != nil && *e.ExpireAt <= now {
 			continue
 		}
