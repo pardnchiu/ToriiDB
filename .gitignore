@@ -1,3 +1,5 @@
 .DS_Store
 .doc/
 temp/
+.env
+.env.local
