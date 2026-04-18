@@ -7,9 +7,10 @@
 ```mermaid
 graph TB
     Client[REPL / Embed API] --> Exec[Exec 路由]
-    Exec --> Core[core - db index]
+    Exec --> Core[core - db index + embedder]
     Core --> Store[Store - 16 DBs]
     Core --> Filter[Filter 引擎]
+    Core --> Vector[Vector 引擎]
 
     Store --> Memory[記憶體 Map]
     Store --> AOF[AOF 追加日誌]
@@ -18,15 +19,23 @@ graph TB
     Filter --> Scan[切塊並發掃描]
     Scan --> Memory
 
+    Vector --> TopK[Top-K Cosine 掃描]
+    Vector --> EmbedCache[__torii:embed 快取]
+    Vector --> OpenAI[OpenAI Client]
+    TopK --> Memory
+    EmbedCache --> Memory
+
     BG[cleanTimer goroutine] -. ctx 取消 .-> Store
+    WG[Store.wg] -. 等待背景 embed 收斂 .-> Core
 ```
 
 核心物件關係：
 
-- `Store` 擁有 `[16]*db` 陣列與 `cleanTimer` 的 context cancel。
-- `core` 是 `Store` 與 `Session` 的嵌入結構，持有指向 `Store.allDBs` 的指標與目前 db index。
-- `Session` 由 `Store.Session()` 衍生，共享底層 db 陣列但擁有獨立 index。
+- `Store` 擁有 `[16]*db` 陣列、`cleanTimer` 的 context cancel，以及追蹤背景向量補寫的 `sync.WaitGroup`。
+- `core` 是 `Store` 與 `Session` 的嵌入結構，持有指向 `Store.allDBs` 的指標、目前 db index，以及共用的 `*openai.Client`（未設 `OPENAI_API_KEY` 時為 nil）。
+- `Session` 由 `Store.Session()` 衍生，共享底層 db 陣列、embedder 與 WaitGroup，但擁有獨立 index。
 - `filter` 套件獨立於 store，僅透過 `Filter` 介面被 `Query` 呼叫。
+- 向量路徑為 opt-in：`SetVector` / `VSearch` 在 embedder 為 nil 時會明確回錯，核心 KV 路徑執行期不受影響。
 
 ## Module: Store
 
@@ -170,6 +179,45 @@ graph TB
 - `AtoFilter` 先將 `(` / `)` 從 token 中剝離成獨立詞，再交給 `Parser.Or()` 建構 AST。
 - `Match` 同時接受數值與字串，數值比較先走 `utils.Vtof`，失敗後退回字串比較。
 
+## Module: Vector
+
+向量直接掛在 `Entry` 上內嵌保存，唯一的旁路資料是 `__torii:embed:*` 前綴下的 embedding 快取。
+
+```mermaid
+graph TB
+    subgraph Vector
+        SetV[SetVector] --> MainWrite[主 key 寫入 + AOF]
+        SetV --> Async[背景 goroutine]
+        Async --> WG[Store.wg]
+        Async --> CacheLookup{embed 快取命中?}
+        CacheLookup -- 是 --> AttachVec[掛上 Entry.Vector]
+        CacheLookup -- 否 --> Embed[OpenAI embed]
+        Embed --> CachePut[__torii:embed:sha256 寫入]
+        CachePut --> AttachVec
+        AttachVec --> AOFV[addToAOFWithVector]
+
+        VSearch[VSearch] --> QEmbed[resolveQueryVector 走快取 / embed]
+        QEmbed --> ScanTopK[掃描 d.data + min-heap]
+        ScanTopK --> Output[top-K keys]
+
+        VSim[VSim] --> PairRead[Get key1 + Get key2]
+        PairRead --> Cos[cosine]
+
+        VGet[VGet] --> Copy[深拷貝 Entry.Vector]
+    end
+    OpenAI[OpenAI HTTP] <--> Embed
+    FS[(AOF)] <-- replay/compact --> AOFV
+```
+
+- `Entry.Vector []float32`：每個 key 內嵌的 embedding，缺席時為 `nil`。
+- `vector.go`：base64 little-endian float32 編解碼（`encodeVector` / `decodeVector`）、`cosine`、`isInternal` — 凡是以 `__torii:` 保留前綴開頭的 key 都會被掃描類指令跳過。
+- `vcache.go`：`getVector` / `putVector` 將 embedding 以 ToriiDB entry 形式快取於 `__torii:embed:<sha256(model|dim|text)>`。Payload 為 JSON `{"v":"<base64>","d":<dim>,"m":"<model>"}`。`d != currentDim` 視為 MISS；無 TTL — embedding 在 (model, dim, text) 下是決定性的。
+- `aof.go`：`AOFRecord.Vector *string` 寫入 base64 向量，僅在 `len(vec) > 0` 時輸出，確保與既有紀錄向後相容。`replayAOF` 解碼還原 `Entry.Vector`，`compact` 重新寫回。
+- `SetVector` 鎖序：主 key 以寫鎖寫入 → AOF → 釋鎖；背景 goroutine 以 RLock 讀 `__torii:embed:*`，打 OpenAI 時**完全不持鎖**，之後再取兩次寫鎖（一次寫入快取，一次掛 Entry.Vector + 追加 AOF）。
+- 一般 `Set()` 在覆寫時會清空 `Entry.Vector` — 未帶 `VECTOR` 重新 SET 表示底層文字已變，舊 embedding 需一併作廢。
+- `VSearch` 全程持 db RLock；`scanTopK` 以大小為 k 的 min-heap 維護結果，最壞情況 O(n log k)。
+- `Close()` 會先 block 在 `Store.wg` 上等待背景 embed 排空，確保不會與 AOF compaction 競態。
+
 ## Data Flow: Set → 持久化
 
 ```mermaid
@@ -220,6 +268,62 @@ sequenceDiagram
     end
     core->>core: sortAndCollect limit
     core-->>Caller: []string keys
+```
+
+## Data Flow: SetVector → 非同步掛載
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant core
+    participant db
+    participant BG as goroutine
+    participant OpenAI
+    participant FS as 檔案系統
+
+    Caller->>core: SetVector ctx key value flag expireAt
+    core->>db: mu.Lock 主 key 寫入
+    core->>FS: 快照 + addToAOF
+    core-->>Caller: nil（主 key 已持久化）
+    core->>BG: go attachVectorBG，Store.wg.Add
+    BG->>db: mu.RLock + getVector 查 __torii:embed
+    alt 快取命中
+        db-->>BG: []float32
+    else 快取未命中
+        BG->>OpenAI: POST /v1/embeddings
+        OpenAI-->>BG: []float32
+        BG->>db: mu.Lock putVector + addToAOFWithVector
+    end
+    BG->>db: mu.Lock 掛 Entry.Vector + addToAOFWithVector
+    BG-->>core: Store.wg.Done
+```
+
+## Data Flow: VSearch → Top-K Cosine
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant core
+    participant db
+    participant Cache as __torii:embed
+    participant OpenAI
+
+    Caller->>core: VSearch ctx text pattern k
+    core->>db: mu.RLock resolveQueryVector
+    core->>Cache: getVector model dim text
+    alt 快取命中
+        Cache-->>core: []float32
+    else 快取未命中
+        core->>OpenAI: POST /v1/embeddings
+        OpenAI-->>core: []float32
+        core->>db: mu.Lock putVector
+    end
+    core->>db: mu.RLock scanTopK
+    loop 每筆 entry
+        core->>core: 跳過 isInternal / 過期 / 維度不符 / pattern 不匹配
+        core->>core: cosine + min-heap Push/Fix
+    end
+    core-->>Caller: top-K keys 依分數降序
 ```
 
 ## State Machine: db 生命週期

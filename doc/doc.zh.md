@@ -6,8 +6,9 @@
 
 - Go 1.25 或更高版本
 - 具備讀寫權限的本地目錄（預設 `./temp`）
+- **選用**：`.env` 中設定 `OPENAI_API_KEY`（僅 `SET ... VECTOR` / `VSEARCH` / `VSIM` / `VGET` 會用到）
 
-無外部服務依賴。
+核心儲存無外部服務依賴。向量功能在首次使用時才初始化 OpenAI client，未設 key 時自動 no-op。
 
 ## 安裝
 
@@ -15,6 +16,13 @@
 
 ```bash
 go get github.com/pardnchiu/ToriiDB
+```
+
+### 向量功能的 .env
+
+```bash
+# .env
+OPENAI_API_KEY=sk-...
 ```
 
 ### 從原始碼建置 REPL
@@ -156,6 +164,27 @@ f, _ = filter.AtoFilter(
 )
 ```
 
+### 語意向量搜尋
+
+```go
+ctx := context.Background()
+
+_ = s.SetVector(ctx, "doc:1", "How to cook pasta", store.SetDefault, nil)
+_ = s.SetVector(ctx, "doc:2", "Building a web server in Go", store.SetDefault, nil)
+_ = s.SetVector(ctx, "doc:3", "Italian dinner recipes", store.SetDefault, nil)
+
+keys, err := s.VSearch(ctx, "cooking recipe", "doc:*", 2)
+if err != nil {
+    log.Fatal(err)
+}
+// keys == []string{"doc:3", "doc:1"} — 依 cosine 降序回傳 top-K
+
+score, err := s.VSim("doc:1", "doc:3")
+// score ~= 0.82（cosine 相似度，範圍 -1..1）
+
+vec, ok := s.VGet("doc:1") // 深拷貝 []float32，外部修改不影響 Entry.Vector
+```
+
 ### REPL 互動
 
 ```bash
@@ -169,6 +198,15 @@ toriidb[0]> GET user:1.name
 Alice
 toriidb[0]> QUERY age GT 20 AND name LIKE Ali*
 1) user:1
+toriidb[0]> SET doc:1 "How to cook pasta" VECTOR
+OK
+toriidb[0]> SET doc:2 "Italian dinner recipes" VECTOR
+OK
+toriidb[0]> VSEARCH cooking recipe MATCH doc:* LIMIT 2
+1) doc:2
+2) doc:1
+toriidb[0]> VSIM doc:1 doc:2
+(float) 0.8213
 toriidb[0]> SELECT 3
 OK
 toriidb[3]> exit
@@ -235,6 +273,15 @@ toriidb[3]> exit
 | `Query` | `func (c *core) Query(f filter.Filter, limit int) []string` | JSON 欄位條件查詢，接受任何 `filter.Filter` |
 | `Exec` | `func (c *core) Exec(input string) string` | REPL 命令路由 |
 
+### 向量
+
+| 方法 | 簽章 | 說明 |
+|------|------|------|
+| `SetVector` | `func (c *core) SetVector(ctx context.Context, key, value string, flag SetFlag, expireAt *int64) error` | 主 key 同步寫入，背景 goroutine 非同步補 embedding（`Close()` 透過 `sync.WaitGroup` 等待排空） |
+| `VSearch` | `func (c *core) VSearch(ctx context.Context, text, pattern string, k int) ([]string, error)` | Top-K cosine 搜尋；`k <= 0` 預設為 10，`pattern` 以 glob 過濾 key，自動跳過 `__torii:*` 內部 key |
+| `VSim` | `func (c *core) VSim(key1, key2 string) (float64, error)` | 兩個 key 的向量 cosine 相似度；任一向量缺失回 `errVectorMissing`、維度不符回 `errVectorMismatch` |
+| `VGet` | `func (c *core) VGet(key string) ([]float32, bool)` | 以深拷貝回傳儲存的向量，避免外部修改 `Entry.Vector` |
+
 ### filter 套件
 
 | 類型 | 說明 |
@@ -253,7 +300,7 @@ toriidb[3]> exit
 | 指令 | 語法 | 說明 |
 |------|------|------|
 | `GET` | `GET <key[.field...]>` | 讀取 key 或巢狀欄位 |
-| `SET` | `SET <key> <value> [NX\|XX] [<seconds>]` | 寫入；最後一個整數會被視為 TTL 秒數 |
+| `SET` | `SET <key> <value> [NX\|XX] [<seconds>] [VECTOR]` | 寫入；尾端整數為 TTL 秒數，尾端 `VECTOR` 附掛 OpenAI embedding |
 | `DEL` | `DEL <key> [key2...]` 或 `DEL <key.field>` | 批次刪除或單一欄位刪除 |
 | `EXIST` | `EXIST <key[.field...]>` | 回傳 `(integer) 0/1` |
 | `TYPE` | `TYPE <key[.field...]>` | 回傳型別字串 |
@@ -262,6 +309,9 @@ toriidb[3]> exit
 | `KEYS` | `KEYS <pattern>` | glob 匹配 |
 | `FIND` | `FIND <op> <value> [LIMIT <n>]` | 全域值搜尋 |
 | `QUERY` | `QUERY <expression> [LIMIT <n>]` | 中綴表達式查詢 |
+| `VSEARCH` | `VSEARCH <text> [MATCH <pattern>] [LIMIT <n>]` | Top-K cosine 搜尋；`MATCH` / `LIMIT` 順序可交換；預設 `LIMIT 10` |
+| `VSIM` | `VSIM <key1> <key2>` | 兩個 key 的向量 cosine 相似度；任一缺向量回 `(nil)` |
+| `VGET` | `VGET <key>` | 以 JSON 陣列格式回傳儲存向量（除錯用） |
 | `SELECT` | `SELECT <0-15>` | 切換 DB |
 | `exit` / `quit` | 離開 REPL | |
 

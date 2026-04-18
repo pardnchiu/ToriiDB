@@ -6,8 +6,9 @@
 
 - Go 1.25 or higher
 - A writable local directory (defaults to `./temp`)
+- **Optional**: `OPENAI_API_KEY` in `.env` (required only for `SET ... VECTOR` / `VSEARCH` / `VSIM` / `VGET`)
 
-No external services required.
+Core storage has no external service dependency. Vector features lazily initialize the OpenAI client on first use and no-op if the key is absent.
 
 ## Installation
 
@@ -15,6 +16,13 @@ No external services required.
 
 ```bash
 go get github.com/pardnchiu/ToriiDB
+```
+
+### .env for vector features
+
+```bash
+# .env
+OPENAI_API_KEY=sk-...
 ```
 
 ### Build the REPL from source
@@ -156,6 +164,27 @@ f, _ = filter.AtoFilter(
 )
 ```
 
+### Semantic vector search
+
+```go
+ctx := context.Background()
+
+_ = s.SetVector(ctx, "doc:1", "How to cook pasta", store.SetDefault, nil)
+_ = s.SetVector(ctx, "doc:2", "Building a web server in Go", store.SetDefault, nil)
+_ = s.SetVector(ctx, "doc:3", "Italian dinner recipes", store.SetDefault, nil)
+
+keys, err := s.VSearch(ctx, "cooking recipe", "doc:*", 2)
+if err != nil {
+    log.Fatal(err)
+}
+// keys == []string{"doc:3", "doc:1"} — top-K by cosine, descending
+
+score, err := s.VSim("doc:1", "doc:3")
+// score ~= 0.82 (cosine similarity, -1..1)
+
+vec, ok := s.VGet("doc:1") // defensive copy of []float32
+```
+
 ### REPL session
 
 ```bash
@@ -169,6 +198,15 @@ toriidb[0]> GET user:1.name
 Alice
 toriidb[0]> QUERY age GT 20 AND name LIKE Ali*
 1) user:1
+toriidb[0]> SET doc:1 "How to cook pasta" VECTOR
+OK
+toriidb[0]> SET doc:2 "Italian dinner recipes" VECTOR
+OK
+toriidb[0]> VSEARCH cooking recipe MATCH doc:* LIMIT 2
+1) doc:2
+2) doc:1
+toriidb[0]> VSIM doc:1 doc:2
+(float) 0.8213
 toriidb[0]> SELECT 3
 OK
 toriidb[3]> exit
@@ -235,6 +273,15 @@ toriidb[3]> exit
 | `Query` | `func (c *core) Query(f filter.Filter, limit int) []string` | JSON field predicate; accepts any `filter.Filter` |
 | `Exec` | `func (c *core) Exec(input string) string` | REPL command router |
 
+### Vector
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `SetVector` | `func (c *core) SetVector(ctx context.Context, key, value string, flag SetFlag, expireAt *int64) error` | Writes the main key synchronously, then asynchronously attaches the embedding via a background goroutine (joined on `Close()`) |
+| `VSearch` | `func (c *core) VSearch(ctx context.Context, text, pattern string, k int) ([]string, error)` | Top-K cosine search; `k <= 0` defaults to 10; `pattern` filters keys via glob match; skips internal `__torii:*` keys |
+| `VSim` | `func (c *core) VSim(key1, key2 string) (float64, error)` | Cosine similarity between two stored vectors; returns `errVectorMissing` on any missing / empty vector, `errVectorMismatch` on dimension mismatch |
+| `VGet` | `func (c *core) VGet(key string) ([]float32, bool)` | Returns a defensive copy of the stored vector so callers cannot mutate `Entry.Vector` |
+
 ### filter package
 
 | Type | Description |
@@ -253,7 +300,7 @@ toriidb[3]> exit
 | Command | Syntax | Description |
 |---------|--------|-------------|
 | `GET` | `GET <key[.field...]>` | Reads a key or nested field |
-| `SET` | `SET <key> <value> [NX\|XX] [<seconds>]` | Writes; a trailing integer is treated as TTL seconds |
+| `SET` | `SET <key> <value> [NX\|XX] [<seconds>] [VECTOR]` | Writes; trailing integer is TTL seconds; trailing `VECTOR` attaches an OpenAI embedding |
 | `DEL` | `DEL <key> [key2...]` or `DEL <key.field>` | Batch delete or nested field delete |
 | `EXIST` | `EXIST <key[.field...]>` | Returns `(integer) 0/1` |
 | `TYPE` | `TYPE <key[.field...]>` | Returns the type label |
@@ -262,6 +309,9 @@ toriidb[3]> exit
 | `KEYS` | `KEYS <pattern>` | Glob matching |
 | `FIND` | `FIND <op> <value> [LIMIT <n>]` | Global value search |
 | `QUERY` | `QUERY <expression> [LIMIT <n>]` | Infix expression query |
+| `VSEARCH` | `VSEARCH <text> [MATCH <pattern>] [LIMIT <n>]` | Top-K cosine search; `MATCH` / `LIMIT` can appear in either order; default `LIMIT 10` |
+| `VSIM` | `VSIM <key1> <key2>` | Cosine similarity between two stored vectors; `(nil)` on missing / empty vector |
+| `VGET` | `VGET <key>` | Returns the stored vector as a JSON array (debug helper) |
 | `SELECT` | `SELECT <0-15>` | Switches DB |
 | `exit` / `quit` | Leaves the REPL | |
 

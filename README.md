@@ -4,7 +4,7 @@
 ***
 
 <p align="center">
-  <strong>EMBEDDED KV WITH JSON DOCUMENT QUERY, ZERO DEPENDENCIES!</strong>
+  <strong>EMBEDDED KV WITH JSON QUERY AND SEMANTIC VECTOR SEARCH!</strong>
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 
 ***
 
-> A Go embedded KV database with dot-notation JSON queries, AOF persistence, and Redis-style commands
+> A Go embedded KV database with dot-notation JSON queries, inline vector embeddings, cosine top-K search, and AOF persistence
 
 ## Table of Contents
 
@@ -30,7 +30,14 @@
 
 ## Use Cases
 
-At its core this is KV storage — lookups run as full scans with per-value type inference rather than through a traditional query engine. Data is persisted to disk (AOF + JSON snapshots) with an in-memory cache for reads. There are no indexes: `GET` / `SET` are O(1), `FIND` / `QUERY` are O(n); scans over 1024 entries auto-shard across goroutines, and complex predicates over 10k entries benchmark at ~3ms on Apple M5.
+ToriiDB is a **four-in-one embedded database** — a single Go binary providing:
+
+- **KV cache** — Redis-style commands and data model
+- **Document DB** — MongoDB-style JSON field queries and infix expressions
+- **Vector DB** — OpenAI embeddings inlined on each key, cosine top-K semantic retrieval
+- **Local persistence** — AOF append log + JSON snapshots, with an in-memory parsed cache
+
+No extra service, no secondary index engine, no separate vector store; embeddings live inline on each key and flow through the same AOF and compaction paths as the KV values. Aimed at Go projects that want to replace a Redis + MongoDB + Pinecone stack with a single import, not run one behind a network.
 
 Best suited for single-process, single-host embedded scenarios with up to ~10k entries per database:
 
@@ -38,12 +45,13 @@ Best suited for single-process, single-host embedded scenarios with up to ~10k e
 - Prototypes / MVPs — skip the DB setup and embed directly
 - Desktop apps and IoT devices — embedded storage, cross-compile friendly
 - LINE bots and Discord bots — conversation state and user data
-- AI personal assistants — memory, chat history, preferences, context cache
+- AI personal assistants — memory, chat history, preferences, context cache, semantic recall
+- Small-scale RAG and semantic search — documents, FAQs, notes with inline embeddings
 - Single-host API servers — sessions, tokens, config, and other lightweight storage
 - Personal blogs and small CMS backends — up to a few thousand posts or users
-- Small-to-mid projects that don't warrant Redis / MongoDB / SQLite
+- Small-to-mid projects that don't warrant Redis / MongoDB / SQLite / a dedicated vector DB
 
-**Not suitable for**: high-concurrency online services, datasets larger than memory, cross-machine access, multi-process writers, or heavy queries that require index acceleration.
+**Not suitable for**: high-concurrency online services, datasets larger than memory, cross-machine access, multi-process writers, heavy queries that require index acceleration, or vector corpora beyond ~10k entries where linear scan becomes a bottleneck.
 
 A MongoDB export utility is planned; the data model maps across natively.
 
@@ -51,13 +59,21 @@ A MongoDB export utility is planned; the data model maps across natively.
 
 > `go get github.com/pardnchiu/ToriiDB` · [Documentation](./doc/doc.md)
 
-### Zero Dependencies
+### Redis × Mongo × Vector Hybrid DX
 
-Pure Go standard library only — no cgo, no third-party packages, cross-compile and embed anywhere.
+Redis-style KV commands, MongoDB-style field predicates, and semantic vector search behind a single command surface — cache, document lookup, and similarity retrieval in one API.
 
-### Redis × Mongo Hybrid DX
+### Inline Per-Key Vector Embeddings
 
-Redis-style KV commands paired with MongoDB-style field predicates, covering both cache and document lookup in one API.
+`SET ... VECTOR` attaches an OpenAI embedding directly to the key — no separate index, no sidecar store; the vector rides alongside the value through AOF and compaction.
+
+### Content-Addressed Embedding Cache
+
+Embeddings are cached under `__torii:embed:<sha256(model|dim|text)>` and transparently reused — identical texts never hit the OpenAI API twice, even across restarts.
+
+### Top-K Cosine Search
+
+`VSEARCH` runs a linear scan with a min-heap, filters by glob `MATCH`, honours `LIMIT`, skips expired and dimension-mismatched entries, and reuses the cached query embedding.
 
 ### 16 Databases with Lazy Replay
 
@@ -89,7 +105,11 @@ A single Store spawns Sessions that carry their own db index so concurrent gorou
 
 ### Size-Triggered Compaction
 
-AOF auto-compacts inline when it doubles its baseline; `Close()` compacts all active DBs in parallel, so shutdown is bounded by the slowest one.
+AOF auto-compacts inline when it doubles its baseline; `Close()` drains pending async embeds via `sync.WaitGroup` then compacts all active DBs in parallel.
+
+### Reserved Internal Namespace
+
+Scan commands (`KEYS` / `FIND` / `QUERY` / `VSEARCH`) skip the `__torii:*` prefix so internal keys like the embedding cache never leak to users.
 
 ### Automatic Type Detection
 
@@ -102,14 +122,19 @@ Values are classified as JSON / String / Int / Float / Bool / Date on write and 
 ```mermaid
 graph TB
     Client[REPL / Embed API] --> Exec[Exec Router]
-    Exec --> Core[core - db index]
+    Exec --> Core[core - db index + embedder]
     Core --> Store[Store - 16 DBs]
     Core --> Filter[Filter Engine]
+    Core --> Vector[Vector Engine]
     Store --> Memory[In-Memory Map]
     Store --> AOF[AOF Append Log]
     Store --> Snapshot[MD5 JSON Snapshot]
     Filter --> Scan[Chunked Parallel Scan]
+    Vector --> TopK[Top-K Cosine Scan]
+    Vector --> EmbedCache[Embedding Cache]
+    Vector --> OpenAI[OpenAI Embedding Client]
     Scan --> Memory
+    TopK --> Memory
 ```
 
 ## File Structure
@@ -120,9 +145,15 @@ ToriiDB/
 │   └── test/
 │       └── main.go              # REPL entry point
 ├── core/
+│   ├── openai/                  # text-embedding-3-small client (singleton)
 │   ├── store/                   # storage engine and command impls
+│   │   ├── vector.go            # float32 codec + cosine + isInternal
+│   │   ├── vcache.go            # __torii:embed:* cache
+│   │   ├── vsearch.go           # top-K min-heap cosine scan
+│   │   ├── vsim.go              # VSim + VGet
 │   │   └── filter/              # query expression and operators
 │   └── utils/                   # shared helpers
+├── .env                         # OPENAI_API_KEY (optional, for vector features)
 ├── go.mod
 ├── Makefile
 └── README.md
@@ -132,7 +163,7 @@ ToriiDB/
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| unreleased | 2026-04-18 | `core/openai` embedding client package (singleton + godotenv auto-load), with unit and network integration tests |
+| v0.5.0 | 2026-04-18 | Semantic vector search — `SET ... VECTOR` inline embeddings, `VSEARCH` top-K cosine, `VSIM` / `VGET`, content-hash embedding cache under `__torii:embed:*`, AOF vector persistence |
 | v0.4.4 | 2026-04-16 | Parsed JSON cache in `Entry` to eliminate repeated `Unmarshal` on hot paths; split-lock read/write APIs |
 | v0.4.3 | 2026-04-10 | AOF compaction switched from line count to byte size with 1MB floor |
 | v0.4.2 | 2026-04-10 | Inline AOF compaction triggered when inflation ratio exceeds 2x |

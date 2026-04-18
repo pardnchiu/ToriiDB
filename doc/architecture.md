@@ -7,9 +7,10 @@
 ```mermaid
 graph TB
     Client[REPL / Embed API] --> Exec[Exec Router]
-    Exec --> Core[core - db index]
+    Exec --> Core[core - db index + embedder]
     Core --> Store[Store - 16 DBs]
     Core --> Filter[Filter Engine]
+    Core --> Vector[Vector Engine]
 
     Store --> Memory[In-Memory Map]
     Store --> AOF[AOF Append Log]
@@ -18,15 +19,23 @@ graph TB
     Filter --> Scan[Chunked Parallel Scan]
     Scan --> Memory
 
+    Vector --> TopK[Top-K Cosine Scan]
+    Vector --> EmbedCache[__torii:embed cache]
+    Vector --> OpenAI[OpenAI Client]
+    TopK --> Memory
+    EmbedCache --> Memory
+
     BG[cleanTimer goroutine] -. ctx cancel .-> Store
+    WG[Store.wg] -. join background embeds .-> Core
 ```
 
 Core object relationships:
 
-- `Store` owns the `[16]*db` array and the `cleanTimer` context cancel.
-- `core` is the struct embedded by both `Store` and `Session`, holding a pointer to `Store.allDBs` and the current db index.
-- `Session` is spawned by `Store.Session()`, sharing the underlying db array while owning its own index.
+- `Store` owns the `[16]*db` array, the `cleanTimer` context cancel, and the `sync.WaitGroup` that tracks in-flight async vector attaches.
+- `core` is the struct embedded by both `Store` and `Session`, holding a pointer to `Store.allDBs`, the current db index, and the shared `*openai.Client` (nil if `OPENAI_API_KEY` is not set).
+- `Session` is spawned by `Store.Session()`, sharing the underlying db array, embedder, and WaitGroup while owning its own index.
 - The `filter` package is independent from `store`, consumed only through the `Filter` interface in `Query`.
+- The vector path is opt-in: `SetVector` / `VSearch` no-op with an explicit error when the embedder is nil, so the core KV path stays dependency-free at runtime.
 
 ## Module: Store
 
@@ -170,6 +179,45 @@ graph TB
 - `AtoFilter` first peels leading `(` and trailing `)` into standalone tokens, then hands the token list to `Parser.Or()` to build the AST.
 - `Match` accepts both numeric and string values — numeric comparison first tries `utils.Vtof`, falling back to string comparison on failure.
 
+## Module: Vector
+
+Vector persistence lives inline on each `Entry`; the only sidecar is the embedding cache under the `__torii:embed:*` prefix.
+
+```mermaid
+graph TB
+    subgraph Vector
+        SetV[SetVector] --> MainWrite[main key write + AOF]
+        SetV --> Async[background goroutine]
+        Async --> WG[Store.wg]
+        Async --> CacheLookup{embed cache HIT?}
+        CacheLookup -- yes --> AttachVec[attach Entry.Vector]
+        CacheLookup -- no --> Embed[OpenAI embed]
+        Embed --> CachePut[__torii:embed:sha256 put]
+        CachePut --> AttachVec
+        AttachVec --> AOFV[addToAOFWithVector]
+
+        VSearch[VSearch] --> QEmbed[resolveQueryVector cache HIT / embed]
+        QEmbed --> ScanTopK[scan d.data + min-heap]
+        ScanTopK --> Output[top-K keys]
+
+        VSim[VSim] --> PairRead[Get key1 + Get key2]
+        PairRead --> Cos[cosine]
+
+        VGet[VGet] --> Copy[defensive copy of Entry.Vector]
+    end
+    OpenAI[OpenAI HTTP] <--> Embed
+    FS[(AOF)] <-- replay/compact --> AOFV
+```
+
+- `Entry.Vector []float32`: inline per-key embedding, `nil` when absent.
+- `vector.go`: base64 little-endian float32 codec (`encodeVector` / `decodeVector`), `cosine`, and `isInternal` — any key with the reserved `__torii:` prefix is skipped by scan commands.
+- `vcache.go`: `getVector` / `putVector` store cached embeddings under `__torii:embed:<sha256(model|dim|text)>`. Payload is JSON `{"v":"<base64>","d":<dim>,"m":"<model>"}`. `d != currentDim` is treated as MISS; no TTL since embeddings are deterministic per (model, dim, text).
+- `aof.go`: `AOFRecord.Vector *string` persists the base64 vector; emitted only when `len(vec) > 0` for backward compatibility. `replayAOF` decodes back into `Entry.Vector`; `compact` re-emits.
+- `SetVector` lock order: main key write under write lock → AOF → release; background goroutine reads `__torii:embed:*` under RLock, calls OpenAI under **no lock**, then takes the write lock twice (once to put cache, once to attach to main key + append AOF).
+- Plain `Set()` invalidates `Entry.Vector` on overwrite — a re-set without `VECTOR` means the underlying text changed, so the stale embedding is dropped.
+- `VSearch` holds the db RLock across the whole scan; `scanTopK` maintains a size-k min-heap so worst case is O(n log k).
+- `Close()` blocks on `Store.wg` before compacting AOF, guaranteeing no in-flight embed races the shutdown.
+
 ## Data Flow: Set → Persistence
 
 ```mermaid
@@ -220,6 +268,62 @@ sequenceDiagram
     end
     core->>core: sortAndCollect limit
     core-->>Caller: []string keys
+```
+
+## Data Flow: SetVector → async attach
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant core
+    participant db
+    participant BG as goroutine
+    participant OpenAI
+    participant FS as Filesystem
+
+    Caller->>core: SetVector ctx key value flag expireAt
+    core->>db: mu.Lock main key write
+    core->>FS: snapshot + addToAOF
+    core-->>Caller: nil (main key durable)
+    core->>BG: go attachVectorBG Store.wg.Add
+    BG->>db: mu.RLock + getVector from __torii:embed
+    alt cache HIT
+        db-->>BG: []float32
+    else cache MISS
+        BG->>OpenAI: POST /v1/embeddings
+        OpenAI-->>BG: []float32
+        BG->>db: mu.Lock putVector + addToAOFWithVector
+    end
+    BG->>db: mu.Lock attach Entry.Vector + addToAOFWithVector
+    BG-->>core: Store.wg.Done
+```
+
+## Data Flow: VSearch → top-K cosine
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant core
+    participant db
+    participant Cache as __torii:embed
+    participant OpenAI
+
+    Caller->>core: VSearch ctx text pattern k
+    core->>db: mu.RLock resolveQueryVector
+    core->>Cache: getVector model dim text
+    alt cache HIT
+        Cache-->>core: []float32
+    else cache MISS
+        core->>OpenAI: POST /v1/embeddings
+        OpenAI-->>core: []float32
+        core->>db: mu.Lock putVector
+    end
+    core->>db: mu.RLock scanTopK
+    loop each entry
+        core->>core: skip isInternal / expired / dim mismatch / pattern no-match
+        core->>core: cosine + min-heap Push/Fix
+    end
+    core-->>Caller: top-K keys descending
 ```
 
 ## State Machine: db lifecycle
