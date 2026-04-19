@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/pardnchiu/go-utils/filesystem/keychain"
 	"github.com/pardnchiu/go-utils/utils"
 )
 
@@ -53,7 +55,16 @@ func New() (*Client, error) {
 	once.Do(func() {
 		_ = godotenv.Load()
 
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = "."
+		}
+		keychain.Init("ToriiDB", home)
+
 		apiKey := strings.TrimSpace(utils.GetWithDefault("OPENAI_API_KEY", ""))
+		if apiKey == "" {
+			apiKey = strings.TrimSpace(keychain.Get("OPENAI_API_KEY"))
+		}
 		if apiKey == "" {
 			initErr = errors.New("OPENAI_API_KEY is required")
 			return
