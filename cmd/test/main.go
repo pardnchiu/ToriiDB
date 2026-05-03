@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/pardnchiu/ToriiDB/core/store"
+	"github.com/agenvoy/toriidb/core/store"
 )
 
 func main() {

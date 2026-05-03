@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pardnchiu/ToriiDB/core/utils"
+	"github.com/agenvoy/toriidb/core/utils"
 )
 
 var errEmbedderNotConfigured = errors.New("OPENAI_API_KEY not set; vector operations disabled")

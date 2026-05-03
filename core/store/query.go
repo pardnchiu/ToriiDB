@@ -3,7 +3,7 @@ package store
 import (
 	"time"
 
-	"github.com/pardnchiu/ToriiDB/core/store/filter"
+	"github.com/agenvoy/toriidb/core/store/filter"
 )
 
 func (c *core) Query(f filter.Filter, limit int) []string {

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pardnchiu/ToriiDB/core/store/filter"
+	"github.com/agenvoy/toriidb/core/store/filter"
 )
 
 const sliceBlock = 1024

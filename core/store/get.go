@@ -3,7 +3,7 @@ package store
 import (
 	"time"
 
-	"github.com/pardnchiu/ToriiDB/core/utils"
+	"github.com/agenvoy/toriidb/core/utils"
 )
 
 func (c *core) Get(key string) (*Entry, bool) {

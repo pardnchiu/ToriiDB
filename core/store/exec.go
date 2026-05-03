@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pardnchiu/ToriiDB/core/store/filter"
-	"github.com/pardnchiu/ToriiDB/core/utils"
+	"github.com/agenvoy/toriidb/core/store/filter"
+	"github.com/agenvoy/toriidb/core/utils"
 )
 
 func (c *core) Exec(input string) string {

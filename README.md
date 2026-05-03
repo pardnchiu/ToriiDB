@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-<a href="https://pkg.go.dev/github.com/pardnchiu/ToriiDB"><img src="https://img.shields.io/badge/GO-REFERENCE-blue?include_prereleases&style=for-the-badge" alt="Go Reference"></a>
-<a href="LICENSE"><img src="https://img.shields.io/github/v/tag/pardnchiu/ToriiDB?include_prereleases&style=for-the-badge" alt="Version"></a>
-<a href="https://github.com/pardnchiu/ToriiDB/releases"><img src="https://img.shields.io/github/license/pardnchiu/ToriiDB?include_prereleases&style=for-the-badge" alt="License"></a>
+<a href="https://pkg.go.dev/github.com/agenvoy/toriidb"><img src="https://img.shields.io/badge/GO-REFERENCE-blue?include_prereleases&style=for-the-badge" alt="Go Reference"></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/v/tag/agenvoy/toriidb?include_prereleases&style=for-the-badge" alt="Version"></a>
+<a href="https://github.com/agenvoy/toriidb/releases"><img src="https://img.shields.io/github/license/agenvoy/toriidb?include_prereleases&style=for-the-badge" alt="License"></a>
 </p>
 
 ***
@@ -57,7 +57,7 @@ A MongoDB export utility is planned; the data model maps across natively.
 
 ## Features
 
-> `go get github.com/pardnchiu/ToriiDB` · [Documentation](./doc/doc.md)
+> `go get github.com/agenvoy/toriidb` · [Documentation](./doc/doc.md)
 
 ### Redis × Mongo × Vector Hybrid DX
 
@@ -191,7 +191,7 @@ This project is licensed under the [MIT LICENSE](LICENSE).
 
 ## Stars
 
-[![Star](https://api.star-history.com/svg?repos=pardnchiu/ToriiDB&type=Date)](https://www.star-history.com/#pardnchiu/ToriiDB&Date)
+[![Star](https://api.star-history.com/svg?repos=agenvoy/toriidb&type=Date)](https://www.star-history.com/#agenvoy/toriidb&Date)
 
 ***
 

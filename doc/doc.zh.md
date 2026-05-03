@@ -15,7 +15,7 @@
 ### 使用 go get
 
 ```bash
-go get github.com/pardnchiu/ToriiDB
+go get github.com/agenvoy/toriidb
 ```
 
 ### 向量功能的 .env
@@ -28,8 +28,8 @@ OPENAI_API_KEY=sk-...
 ### 從原始碼建置 REPL
 
 ```bash
-git clone https://github.com/pardnchiu/ToriiDB.git
-cd ToriiDB
+git clone https://github.com/agenvoy/toriidb.git
+cd toriidb
 go build -o toriidb ./cmd/test
 ./toriidb
 ```
@@ -51,7 +51,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/pardnchiu/ToriiDB/core/store"
+    "github.com/agenvoy/toriidb/core/store"
 )
 
 func main() {
@@ -121,7 +121,7 @@ _, _ = s.IncrField("user:1", []string{"age"}, 1)
 ### Find 全域值搜尋
 
 ```go
-import "github.com/pardnchiu/ToriiDB/core/store/filter"
+import "github.com/agenvoy/toriidb/core/store/filter"
 
 keys := s.Find(filter.EqualTo, "Alice", 0)
 keys = s.Find(filter.GreaterThan, "50", 10)
@@ -131,7 +131,7 @@ keys = s.Find(filter.Like, "*error*", 0)
 ### Query 結構體組合
 
 ```go
-import "github.com/pardnchiu/ToriiDB/core/store/filter"
+import "github.com/agenvoy/toriidb/core/store/filter"
 
 results := s.Query(filter.And{
     filter.GTE{Field: "age", Value: "18"},
