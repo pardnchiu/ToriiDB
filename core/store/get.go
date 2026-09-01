@@ -8,22 +8,29 @@ import (
 
 func (c *core) Get(key string) (*Entry, bool) {
 	db := c.DB()
+
 	db.mu.RLock()
 	e, ok := db.data[key]
+	var snapshot Entry
+	if ok {
+		snapshot = *e
+	}
 	db.mu.RUnlock()
 
 	if !ok {
 		return nil, false
 	}
 
-	if e.ExpireAt != nil && *e.ExpireAt <= time.Now().Unix() {
+	if snapshot.ExpireAt != nil && *snapshot.ExpireAt <= time.Now().Unix() {
 		db.mu.Lock()
-		delete(db.data, key)
+		if current, exists := db.data[key]; exists && current == e {
+			delete(db.data, key)
+		}
 		db.mu.Unlock()
 		return nil, false
 	}
 
-	return e, true
+	return &snapshot, true
 }
 
 func (c *core) GetField(key string, subKeys []string) (string, bool) {

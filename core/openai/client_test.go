@@ -7,14 +7,7 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/joho/godotenv"
 )
-
-func TestMain(m *testing.M) {
-	_ = godotenv.Load("../../.env")
-	os.Exit(m.Run())
-}
 
 func TestNew_Singleton(t *testing.T) {
 	if os.Getenv("OPENAI_API_KEY") == "" {

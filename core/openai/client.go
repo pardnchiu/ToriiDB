@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/pardnchiu/go-pkg/filesystem/keychain"
 	"github.com/pardnchiu/go-pkg/utils"
 )
@@ -53,8 +52,6 @@ type response struct {
 
 func New() (*Client, error) {
 	once.Do(func() {
-		_ = godotenv.Load()
-
 		home, err := os.UserHomeDir()
 		if err != nil {
 			home = "."

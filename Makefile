@@ -1,5 +1,10 @@
 .PHONY: test unit embed
 
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
 test:
 	go run cmd/test/main.go
 
