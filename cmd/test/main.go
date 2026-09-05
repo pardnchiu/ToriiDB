@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	torii, err := store.New()
+	torii, err := store.New("./temp")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		os.Exit(1)

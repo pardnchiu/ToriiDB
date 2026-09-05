@@ -38,7 +38,7 @@ type Daemon struct {
 	done     chan struct{}
 }
 
-func New(dir string) (*Daemon, error) {
+func New(dir string, apiKey ...string) (*Daemon, error) {
 	if dir == "" {
 		return nil, errors.New("dir is required")
 	}
@@ -63,7 +63,7 @@ func New(dir string) (*Daemon, error) {
 		}, nil
 	}
 
-	torii, err := store.New(dir)
+	torii, err := store.New(dir, apiKey...)
 	if err != nil {
 		return nil, fmt.Errorf("open store %s: %w", dir, err)
 	}
