@@ -14,19 +14,21 @@ const (
 )
 
 const (
-	opGet     = "get"
-	opEntries = "entries"
-	opSet     = "set"
-	opDel     = "del"
-	opTTL     = "ttl"
-	opExpire  = "expire"
-	opKeys    = "keys"
-	opVSearch = "vsearch"
+	opGet      = "get"
+	opEntries  = "entries"
+	opSet      = "set"
+	opDel      = "del"
+	opTTL      = "ttl"
+	opExpire   = "expire"
+	opKeys     = "keys"
+	opVSearch  = "vsearch"
+	opEmbedder = "embedder"
 )
 
 const (
 	kindNotFound   = "not_found"
 	kindBadRequest = "bad_request"
+	kindNoEmbedder = "no_embedder"
 	kindInternal   = "internal"
 )
 
@@ -72,14 +74,15 @@ type ListResult struct {
 }
 
 type response struct {
-	Error   string      `json:"error,omitempty"`
-	Kind    string      `json:"kind,omitempty"`
-	Record  *Record     `json:"record,omitempty"`
-	Entries []Record    `json:"entries,omitempty"`
-	List    *ListResult `json:"list,omitempty"`
-	Keys    []string    `json:"keys,omitempty"`
-	TTL     *int64      `json:"ttl,omitempty"`
-	Count   *int        `json:"count,omitempty"`
+	Error    string      `json:"error,omitempty"`
+	Kind     string      `json:"kind,omitempty"`
+	Record   *Record     `json:"record,omitempty"`
+	Entries  []Record    `json:"entries,omitempty"`
+	List     *ListResult `json:"list,omitempty"`
+	Keys     []string    `json:"keys,omitempty"`
+	TTL      *int64      `json:"ttl,omitempty"`
+	Count    *int        `json:"count,omitempty"`
+	Embedder *bool       `json:"embedder,omitempty"`
 }
 
 func failure(kind, message string) response {
@@ -92,6 +95,8 @@ func remoteError(kind, message string) error {
 		return fmt.Errorf("%w: %s", ErrNotFound, message)
 	case kindBadRequest:
 		return fmt.Errorf("%w: %s", ErrBadRequest, message)
+	case kindNoEmbedder:
+		return fmt.Errorf("%w: %s", ErrNoEmbedder, message)
 	}
 	return errors.New(message)
 }

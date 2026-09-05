@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -34,6 +35,8 @@ func (d *Daemon) dispatch(ctx context.Context, req *request) response {
 		return handleKeys(session, req)
 	case opVSearch:
 		return handleVSearch(ctx, session, req)
+	case opEmbedder:
+		return handleEmbedder(session)
 	}
 
 	return failure(kindBadRequest, fmt.Sprintf("unknown op %q", req.Op))
@@ -54,6 +57,18 @@ func toRecord(db int, key string, entry *store.Entry) (Record, error) {
 		UpdatedAt: entry.UpdatedAt,
 		ExpireAt:  entry.ExpireAt,
 	}, nil
+}
+
+func handleEmbedder(session *store.Session) response {
+	has := session.HasEmbedder()
+	return response{Embedder: &has}
+}
+
+func vectorFailure(err error) response {
+	if errors.Is(err, store.ErrNoEmbedder) {
+		return failure(kindNoEmbedder, err.Error())
+	}
+	return failure(kindInternal, err.Error())
 }
 
 func handleGet(session *store.Session, req *request) response {
@@ -130,7 +145,7 @@ func handleSet(ctx context.Context, session *store.Session, req *request) respon
 		err = session.Set(req.Key, value, store.SetDefault, req.ExpireAt)
 	}
 	if err != nil {
-		return failure(kindInternal, err.Error())
+		return vectorFailure(err)
 	}
 
 	return response{}
@@ -217,7 +232,7 @@ func handleVSearch(ctx context.Context, session *store.Session, req *request) re
 
 	keys, err := session.VSearch(ctx, req.Text, pattern, limit)
 	if err != nil {
-		return failure(kindInternal, err.Error())
+		return vectorFailure(err)
 	}
 
 	return response{Keys: keys}

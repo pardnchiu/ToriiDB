@@ -14,8 +14,11 @@ import (
 )
 
 const (
-	maxIdleConns = 8
-	idleWindow   = 5 * time.Second
+	maxIdleConns   = 8
+	idleWindow     = 5 * time.Second
+	defaultTimeout = 10 * time.Second
+	callAttempts   = 3
+	retryBackoff   = 5 * time.Millisecond
 )
 
 type pooled struct {
@@ -49,30 +52,47 @@ func (c *client) call(ctx context.Context, req request) (*response, error) {
 		}
 	}
 
-	fresh, err := c.dial(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("dial %s: %w", c.socket, err)
-	}
+	var last error
+	for attempt := range callAttempts {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, fmt.Errorf("%s: %w", req.Op, ctx.Err())
+			case <-time.After(retryBackoff << (attempt - 1)):
+			}
+		}
 
-	res, reusable, err := c.exchange(ctx, fresh, req)
-	if err != nil {
+		fresh, err := c.dial(ctx)
+		if err != nil {
+			last = fmt.Errorf("dial %s: %w", c.socket, err)
+			continue
+		}
+
+		res, reusable, err := c.exchange(ctx, fresh, req)
+		if err == nil {
+			c.put(fresh, reusable)
+			return res, nil
+		}
+
 		fresh.Close()
-		return nil, err
+		if !dropped(err) {
+			return nil, err
+		}
+		last = err
 	}
 
-	c.put(fresh, reusable)
-	return res, nil
+	return nil, last
 }
 
 func (c *client) exchange(ctx context.Context, p *pooled, req request) (res *response, reusable bool, err error) {
 	stop := context.AfterFunc(ctx, func() { p.Close() })
 	defer func() { reusable = stop() && err == nil }()
 
-	if deadline, ok := ctx.Deadline(); ok {
-		p.SetDeadline(deadline)
-	} else {
-		p.SetDeadline(time.Time{})
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(defaultTimeout)
 	}
+	p.SetDeadline(deadline)
 
 	if err := writeFrame(p, req); err != nil {
 		return nil, false, callError(ctx, req.Op, err)

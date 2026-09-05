@@ -98,6 +98,14 @@ func (d *Daemon) VSearch(ctx context.Context, db int, text, pattern string, limi
 	return res.Keys, nil
 }
 
+func (d *Daemon) HasEmbedder(ctx context.Context) (bool, error) {
+	res, err := d.call(ctx, request{Op: opEmbedder})
+	if err != nil {
+		return false, err
+	}
+	return res.Embedder != nil && *res.Embedder, nil
+}
+
 func (d *Daemon) call(ctx context.Context, req request) (*response, error) {
 	if d.mode == ModeClient {
 		return d.client.call(ctx, req)
