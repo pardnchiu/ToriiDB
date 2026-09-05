@@ -53,6 +53,10 @@ func (c *core) DB() *db {
 	return d
 }
 
+func (c *core) HasEmbedder() bool {
+	return c.embedder != nil
+}
+
 func (c *core) Current() int {
 	return c.db
 }

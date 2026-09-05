@@ -8,14 +8,21 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/pardnchiu/toriidb/core/store"
+)
+
+const (
+	readTimeout  = 30 * time.Second
+	writeTimeout = 30 * time.Second
 )
 
 var (
 	ErrAlreadyRunning = errors.New("another daemon is serving this socket")
 	ErrNotFound       = errors.New("not found")
 	ErrBadRequest     = errors.New("bad request")
+	ErrNoEmbedder     = store.ErrNoEmbedder
 )
 
 type Mode int
@@ -142,6 +149,8 @@ func (d *Daemon) serve(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 
 	for {
+		conn.SetReadDeadline(time.Now().Add(readTimeout))
+
 		raw, err := readFrame(reader)
 		if err != nil {
 			return
@@ -153,6 +162,7 @@ func (d *Daemon) serve(conn net.Conn) {
 			res = d.dispatch(context.Background(), &req)
 		}
 
+		conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		if err := writeFrame(conn, res); err != nil {
 			return
 		}

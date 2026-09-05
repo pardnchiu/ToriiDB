@@ -4,6 +4,7 @@ import (
 	"container/heap"
 	"context"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -36,7 +37,8 @@ func (h *vsearchMinHeap) Pop() any {
 
 func (c *core) VSearch(ctx context.Context, text, pattern string, k int) ([]string, error) {
 	if c.embedder == nil {
-		return nil, errEmbedderNotConfigured
+		slog.Debug("toriidb: VSearch without embedder", slog.Int("db", c.db))
+		return nil, ErrNoEmbedder
 	}
 	if strings.TrimSpace(text) == "" {
 		return nil, fmt.Errorf("vsearch text is empty")

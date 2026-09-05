@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -14,7 +15,7 @@ import (
 	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
-var errEmbedderNotConfigured = errors.New("OPENAI_API_KEY not set; vector operations disabled")
+var ErrNoEmbedder = errors.New("no embedder: OPENAI_API_KEY not provided")
 
 type ValueType int
 
@@ -163,7 +164,10 @@ func (c *core) Set(key, value string, flag SetFlag, expireAt *int64) error {
 
 func (c *core) SetVector(ctx context.Context, key, value string, flag SetFlag, expireAt *int64) error {
 	if c.embedder == nil {
-		return errEmbedderNotConfigured
+		slog.Debug("toriidb: SetVector without embedder",
+			slog.String("key", key),
+			slog.Int("db", c.db))
+		return ErrNoEmbedder
 	}
 	if strings.TrimSpace(value) == "" {
 		return fmt.Errorf("vector text is empty")
