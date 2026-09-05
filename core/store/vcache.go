@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pardnchiu/toriidb/core/utils"
+	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
 type embedPayload struct {
@@ -17,7 +17,7 @@ type embedPayload struct {
 }
 
 func embedKey(model string, dim int, text string) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%s", model, dim, text)))
+	h := sha256.Sum256(fmt.Appendf(nil, "%s|%d|%s", model, dim, text))
 	return internalPrefix + "embed:" + hex.EncodeToString(h[:])
 }
 
@@ -79,7 +79,7 @@ func (d *db) putVector(model string, dim int, text string, vec []float32) error 
 	if err != nil {
 		return fmt.Errorf("d.data[key].JSON: %w", err)
 	}
-	if err := utils.WriteFile(d.filePath(key), raw, 0644); err != nil {
+	if err := go_pkg_filesystem.WriteFile(d.filePath(key), string(raw), 0644); err != nil {
 		return err
 	}
 

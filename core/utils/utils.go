@@ -3,8 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -32,25 +30,6 @@ func WalkKeys(obj any, subKeys []string) (any, bool) {
 		}
 	}
 	return current, true
-}
-
-func WriteFile(path string, content []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("os.MkdirAll: %w", err)
-	}
-
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, content, perm); err != nil {
-		return fmt.Errorf("os.WriteFile: %w", err)
-	}
-
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("os.Rename: %w", err)
-	}
-
-	return nil
 }
 
 func Atov(text string) any {
