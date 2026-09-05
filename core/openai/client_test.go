@@ -9,30 +9,29 @@ import (
 	"time"
 )
 
-func TestNew_Singleton(t *testing.T) {
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("OPENAI_API_KEY not set")
-	}
+func TestNew_KeyPriority(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "from-env")
 
-	c1, err := New()
+	c, err := New("injected")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	c2, err := New()
-	if err != nil {
-		t.Fatalf("New (second call): %v", err)
+	if c.APIKey != "injected" {
+		t.Fatalf("injected key should win over env, got %q", c.APIKey)
 	}
-	if c1 != c2 {
-		t.Fatalf("singleton violated: %p != %p", c1, c2)
-	}
-	if c1.http == nil {
+	if c.http == nil {
 		t.Fatal("http client not initialized")
 	}
-	if c1.APIKey == "" {
-		t.Fatal("APIKey empty")
+
+	c, err = New("")
+	if err != nil {
+		t.Fatalf("New(empty): %v", err)
 	}
-	if c1.Dim <= 0 {
-		t.Fatalf("invalid Dim: %d", c1.Dim)
+	if c.APIKey != "from-env" {
+		t.Fatalf("empty key should fall back to env, got %q", c.APIKey)
+	}
+	if c.Dim <= 0 {
+		t.Fatalf("invalid Dim: %d", c.Dim)
 	}
 }
 
@@ -55,7 +54,7 @@ func TestEmbed_Network(t *testing.T) {
 		t.Skip("OPENAI_API_KEY not set")
 	}
 
-	c, err := New()
+	c, err := New("")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

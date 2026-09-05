@@ -83,15 +83,14 @@ type AOFRecord struct {
 	Vector    *string `json:"vector,omitempty"`
 }
 
-func New(path ...string) (*Store, error) {
-	dir := defaultDir
-
-	switch len(path) {
+func New(dir string, apiKey ...string) (*Store, error) {
+	key := ""
+	switch len(apiKey) {
 	case 0:
 	case 1:
-		dir = path[0]
+		key = apiKey[0]
 	default:
-		return nil, fmt.Errorf("just one path")
+		return nil, fmt.Errorf("just one api key")
 	}
 
 	if err := go_pkg_filesystem.CheckDir(dir, true); err != nil {
@@ -113,7 +112,7 @@ func New(path ...string) (*Store, error) {
 
 	s.core.dbs = &s.allDBs
 	s.core.wg = &s.wg
-	if client, err := openai.New(); err == nil {
+	if client, err := openai.New(key); err == nil {
 		s.core.embedder = &embedder{
 			embed: client.Embed,
 			dim:   client.Dim,

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pardnchiu/go-pkg/filesystem/keychain"
@@ -31,12 +30,6 @@ type Client struct {
 	http   *http.Client
 }
 
-var (
-	once     sync.Once
-	instance *Client
-	initErr  error
-)
-
 type request struct {
 	Input          string `json:"input"`
 	Model          string `json:"model"`
@@ -50,35 +43,37 @@ type response struct {
 	} `json:"data"`
 }
 
-func New() (*Client, error) {
-	once.Do(func() {
+func New(apiKey string) (*Client, error) {
+	apiKey = strings.TrimSpace(apiKey)
+
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(utils.GetWithDefault("OPENAI_API_KEY", ""))
+	}
+
+	if apiKey == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			home = "."
 		}
 		keychain.Init("ToriiDB", home)
+		apiKey = strings.TrimSpace(keychain.Get("OPENAI_API_KEY"))
+	}
 
-		apiKey := strings.TrimSpace(utils.GetWithDefault("OPENAI_API_KEY", ""))
-		if apiKey == "" {
-			apiKey = strings.TrimSpace(keychain.Get("OPENAI_API_KEY"))
-		}
-		if apiKey == "" {
-			initErr = errors.New("OPENAI_API_KEY is required")
-			return
-		}
+	if apiKey == "" {
+		return nil, errors.New("OPENAI_API_KEY is required")
+	}
 
-		dim := utils.GetWithDefaultInt("TORIIDB_EMBED_DIM", defaultDim)
-		if dim <= 0 {
-			dim = defaultDim
-		}
-		instance = &Client{
-			APIKey: apiKey,
-			Dim:    dim,
-			Model:  defaultModel,
-			http:   &http.Client{Timeout: timeout},
-		}
-	})
-	return instance, initErr
+	dim := utils.GetWithDefaultInt("TORIIDB_EMBED_DIM", defaultDim)
+	if dim <= 0 {
+		dim = defaultDim
+	}
+
+	return &Client{
+		APIKey: apiKey,
+		Dim:    dim,
+		Model:  defaultModel,
+		http:   &http.Client{Timeout: timeout},
+	}, nil
 }
 
 func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {

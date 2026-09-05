@@ -20,10 +20,10 @@ func TestStore_New(t *testing.T) {
 		s.Close()
 	})
 
-	t.Run("too many paths", func(t *testing.T) {
-		_, err := store.New("a", "b")
+	t.Run("too many api keys", func(t *testing.T) {
+		_, err := store.New(tempDir(t), "k1", "k2")
 		if err == nil {
-			t.Error("store.New(a, b) should return error")
+			t.Error(`store.New(dir, "k1", "k2") should return error`)
 		}
 	})
 
