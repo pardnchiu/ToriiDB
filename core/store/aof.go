@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"os"
 	"time"
+
+	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
+	go_pkg_filesystem_reader "github.com/pardnchiu/go-pkg/filesystem/reader"
 )
 
 const (
@@ -13,13 +16,7 @@ const (
 )
 
 func (d *db) addToAOF(cmd, key, value string, expireAt *int64) error {
-	return d.writeAOF(AOFRecord{
-		Timestamp: time.Now().Unix(),
-		Command:   cmd,
-		Key:       key,
-		Value:     value,
-		ExpireAt:  expireAt,
-	})
+	return d.addToAOFWithVector(cmd, key, value, expireAt, nil)
 }
 
 func (d *db) addToAOFWithVector(cmd, key, value string, expireAt *int64, vec []float32) error {
@@ -60,22 +57,14 @@ func (d *db) writeAOF(record AOFRecord) error {
 		return err
 	}
 
-	return d.maybeCompact()
-}
-
-func (d *db) maybeCompact() error {
-	baseline := max(d.snapSize, compactMinSize)
-	if d.logSize >= baseline*compactInflationRatio {
+	if d.logSize >= max(d.snapSize, compactMinSize)*compactInflationRatio {
 		return d.compact()
 	}
+
 	return nil
 }
 
 func replayInto(data map[string]*Entry, path string) error {
-	if path == "" {
-		return nil
-	}
-
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -85,15 +74,16 @@ func replayInto(data map[string]*Entry, path string) error {
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
+	reader := bufio.NewReader(file)
+
+	for {
+		line, readErr := reader.ReadBytes('\n')
 
 		var record AOFRecord
-		if json.Unmarshal(line, &record) != nil {
+		if len(line) == 0 || json.Unmarshal(line, &record) != nil {
+			if readErr != nil {
+				break
+			}
 			continue
 		}
 
@@ -145,17 +135,13 @@ func replayInto(data map[string]*Entry, path string) error {
 				e.ExpireAt = nil
 			}
 		}
+
+		if readErr != nil {
+			break
+		}
 	}
 
-	return scanner.Err()
-}
-
-func replayFile(path string) (map[string]*Entry, error) {
-	data := make(map[string]*Entry)
-	if err := replayInto(data, path); err != nil {
-		return nil, err
-	}
-	return data, nil
+	return nil
 }
 
 func (d *db) serialize() ([]byte, error) {
@@ -195,7 +181,7 @@ func (d *db) serialize() ([]byte, error) {
 }
 
 func (d *db) compact() error {
-	if len(d.data) == 0 && !dirExists(d.dir) {
+	if len(d.data) == 0 && !go_pkg_filesystem_reader.IsDir(d.dir) {
 		return nil
 	}
 
@@ -209,12 +195,12 @@ func (d *db) compact() error {
 	}
 
 	if err := writeSync(tmp, buf); err != nil {
-		os.Remove(tmp)
+		go_pkg_filesystem.Remove(tmp)
 		return err
 	}
 
 	if err := os.Rename(tmp, dst); err != nil {
-		os.Remove(tmp)
+		go_pkg_filesystem.Remove(tmp)
 		return err
 	}
 
@@ -236,7 +222,6 @@ func (d *db) compact() error {
 		old.Close()
 	}
 
-	d.gen = bumpGen(d.dir)
 	go gcOlderThan(d.dir, n)
 
 	return nil

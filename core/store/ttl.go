@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pardnchiu/toriidb/core/utils"
+	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
 func (c *core) TTL(key string) int64 {
@@ -43,7 +43,7 @@ func (c *core) Expire(key string, seconds int64) error {
 		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
-	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
+	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
 		return err
 	}
 
@@ -67,7 +67,7 @@ func (c *core) ExpireAt(key string, timestamp int64) error {
 		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
-	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
+	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
 		return err
 	}
 
@@ -91,7 +91,7 @@ func (c *core) Persist(key string) error {
 		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
-	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
+	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
 		return err
 	}
 

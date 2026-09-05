@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
+	go_pkg_filesystem_reader "github.com/pardnchiu/go-pkg/filesystem/reader"
 )
 
 func snapPath(dir string, num int) string {
@@ -35,17 +38,14 @@ func parseName(name string) (int, string, bool) {
 }
 
 func latestSnap(dir string) (string, int) {
-	entries, err := os.ReadDir(dir)
+	entries, err := go_pkg_filesystem_reader.ListAll(dir)
 	if err != nil {
 		return "", 0
 	}
 
 	latest := -1
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		num, kind, ok := parseName(e.Name())
+		num, kind, ok := parseName(e.Name)
 		if !ok || kind != "snap" {
 			continue
 		}
@@ -60,17 +60,13 @@ func latestSnap(dir string) (string, int) {
 }
 
 func gcOlderThan(dir string, keep int) {
-	entries, err := os.ReadDir(dir)
+	entries, err := go_pkg_filesystem_reader.ListAll(dir)
 	if err != nil {
 		return
 	}
 
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-
-		num, kind, ok := parseName(e.Name())
+		num, kind, ok := parseName(e.Name)
 		if !ok {
 			continue
 		}
@@ -78,26 +74,17 @@ func gcOlderThan(dir string, keep int) {
 		switch kind {
 		case "snap":
 			if num < keep {
-				os.Remove(filepath.Join(dir, e.Name()))
+				go_pkg_filesystem.Remove(e.Path)
 			}
 		case "log":
 			if num <= keep {
-				os.Remove(filepath.Join(dir, e.Name()))
+				go_pkg_filesystem.Remove(e.Path)
 			}
 		}
 	}
 }
 
-func dirExists(dir string) bool {
-	info, err := os.Stat(dir)
-	return err == nil && info.IsDir()
-}
-
 func sizeOf(path string) int64 {
-	if path == "" {
-		return 0
-	}
-
 	info, err := os.Stat(path)
 	if err != nil {
 		return 0

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 	"github.com/pardnchiu/toriidb/core/openai"
 )
 
@@ -25,7 +26,6 @@ type db struct {
 	num      int
 	logSize  int64
 	snapSize int64
-	gen      uint64
 	once     sync.Once
 	loaded   bool
 }
@@ -68,8 +68,10 @@ func (c *core) Select(index int) error {
 type Store struct {
 	allDBs [maxDB]*db
 	core
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	closeOnce sync.Once
+	closeErr  error
 }
 
 type AOFRecord struct {
@@ -92,16 +94,8 @@ func New(path ...string) (*Store, error) {
 		return nil, fmt.Errorf("just one path")
 	}
 
-	info, err := os.Stat(dir)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("os.Stat %s: %w", dir, err)
-		}
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return nil, fmt.Errorf("os.MkdirAll %s: %w", dir, err)
-		}
-	} else if !info.IsDir() {
-		return nil, fmt.Errorf("not directory")
+	if err := go_pkg_filesystem.CheckDir(dir, true); err != nil {
+		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -143,11 +137,12 @@ func (d *db) loadAll() {
 	stale, _ := filepath.Glob(filepath.Join(d.dir, "*.tmp"))
 	for _, path := range stale {
 		slog.Warn("toriidb: removing stale temp file", slog.String("file", path))
-		os.Remove(path)
+		go_pkg_filesystem.Remove(path)
 	}
 
 	snap, n := latestSnap(d.dir)
-	if data, err := replayFile(snap); err == nil {
+	data := make(map[string]*Entry)
+	if replayInto(data, snap) == nil {
 		d.data = data
 	}
 	d.snapSize = sizeOf(snap)
@@ -157,7 +152,6 @@ func (d *db) loadAll() {
 	d.logSize = sizeOf(log)
 
 	d.num = n + 1
-	d.gen = readGen(d.dir)
 }
 
 func (d *db) init() error {
@@ -165,8 +159,8 @@ func (d *db) init() error {
 		return nil
 	}
 
-	if err := os.MkdirAll(d.dir, 0755); err != nil {
-		return fmt.Errorf("mkdir: %w", err)
+	if err := go_pkg_filesystem.CheckDir(d.dir, true); err != nil {
+		return err
 	}
 
 	file, err := os.OpenFile(logPath(d.dir, d.num), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
@@ -179,6 +173,11 @@ func (d *db) init() error {
 }
 
 func (s *Store) Close() error {
+	s.closeOnce.Do(func() { s.closeErr = s.closeAll() })
+	return s.closeErr
+}
+
+func (s *Store) closeAll() error {
 	s.wg.Wait()
 	s.cancel()
 
@@ -254,7 +253,7 @@ func (d *db) cleanExpired() {
 	for key, e := range d.data {
 		if e.ExpireAt != nil && *e.ExpireAt <= now {
 			delete(d.data, key)
-			os.Remove(d.filePath(key))
+			go_pkg_filesystem.Remove(d.filePath(key))
 		}
 	}
 }

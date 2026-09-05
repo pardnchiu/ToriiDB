@@ -2,10 +2,9 @@ package store
 
 import (
 	"fmt"
-	"os"
 	"time"
 
-	"github.com/pardnchiu/toriidb/core/utils"
+	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
 func (c *core) Del(keys ...string) int {
@@ -20,7 +19,7 @@ func (c *core) Del(keys ...string) int {
 		}
 
 		delete(db.data, key)
-		os.Remove(db.filePath(key))
+		go_pkg_filesystem.Remove(db.filePath(key))
 		db.addToAOF("DEL", key, "", nil)
 		count++
 	}
@@ -66,7 +65,7 @@ func (c *core) DelField(key string, subKeys []string) error {
 		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
-	if err := utils.WriteFile(db.filePath(key), entryRaw, 0644); err != nil {
+	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(entryRaw), 0644); err != nil {
 		return err
 	}
 

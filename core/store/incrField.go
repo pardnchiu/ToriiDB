@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 	"github.com/pardnchiu/toriidb/core/utils"
 )
 
@@ -56,7 +57,7 @@ func (c *core) IncrField(key string, subKeys []string, delta float64) (float64, 
 		return 0, fmt.Errorf("entry.JSON: %w", err)
 	}
 
-	if err := utils.WriteFile(db.filePath(key), entryRaw, 0644); err != nil {
+	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(entryRaw), 0644); err != nil {
 		return 0, err
 	}
 

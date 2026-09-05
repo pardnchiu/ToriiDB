@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pardnchiu/toriidb/core/utils"
+	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
 var errEmbedderNotConfigured = errors.New("OPENAI_API_KEY not set; vector operations disabled")
@@ -154,7 +154,7 @@ func (c *core) Set(key, value string, flag SetFlag, expireAt *int64) error {
 		return fmt.Errorf("entry.JSON: %w", err)
 	}
 
-	if err := utils.WriteFile(db.filePath(key), raw, 0644); err != nil {
+	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
 		return err
 	}
 
@@ -233,7 +233,7 @@ func (c *core) writeVectorToEntry(d *db, key, text string, vec []float32) {
 	if err != nil {
 		return
 	}
-	_ = utils.WriteFile(d.filePath(key), raw, 0644)
+	_ = go_pkg_filesystem.WriteFile(d.filePath(key), string(raw), 0644)
 	_ = d.addToAOFWithVector("SET", key, entry.Value(), entry.ExpireAt, vec)
 }
 
