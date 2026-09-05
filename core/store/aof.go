@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"time"
+)
 
-	"github.com/pardnchiu/toriidb/core/utils"
+const (
+	compactInflationRatio = 2
+	compactMinSize        = 1 << 20
 )
 
 func (d *db) addToAOF(cmd, key, value string, expireAt *int64) error {
@@ -52,32 +54,34 @@ func (d *db) writeAOF(record AOFRecord) error {
 		return err
 	}
 
-	d.aofSize += int64(n)
+	d.logSize += int64(n)
 
 	if err := d.aof.Sync(); err != nil {
 		return err
 	}
 
-	baseline := d.aofSizeBaseline
-	if baseline < compactMinSize {
-		baseline = compactMinSize
-	}
-	if d.aofSize >= baseline*compactInflationRatio {
+	return d.maybeCompact()
+}
+
+func (d *db) maybeCompact() error {
+	baseline := max(d.snapSize, compactMinSize)
+	if d.logSize >= baseline*compactInflationRatio {
 		return d.compact()
 	}
-
 	return nil
 }
 
-func replayAOF(path string) (map[string]*Entry, int64, error) {
-	data := make(map[string]*Entry)
-	var size int64
+func replayInto(data map[string]*Entry, path string) error {
+	if path == "" {
+		return nil
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return data, 0, nil
+			return nil
 		}
-		return nil, 0, err
+		return err
 	}
 	defer file.Close()
 
@@ -92,8 +96,6 @@ func replayAOF(path string) (map[string]*Entry, int64, error) {
 		if json.Unmarshal(line, &record) != nil {
 			continue
 		}
-
-		size += int64(len(line) + 1)
 
 		switch record.Command {
 		case "SET":
@@ -145,29 +147,18 @@ func replayAOF(path string) (map[string]*Entry, int64, error) {
 		}
 	}
 
-	return data, size, scanner.Err()
+	return scanner.Err()
 }
 
-const (
-	compactInflationRatio = 2
-	compactMinSize        = 1 << 20
-)
-
-func (d *db) compact() error {
-	if d.aof != nil {
-		d.aof.Close()
-		d.aof = nil
+func replayFile(path string) (map[string]*Entry, error) {
+	data := make(map[string]*Entry)
+	if err := replayInto(data, path); err != nil {
+		return nil, err
 	}
+	return data, nil
+}
 
-	aofPath := filepath.Join(d.dir, "record.aof")
-
-	if len(d.data) == 0 {
-		os.Remove(aofPath)
-		d.aofSize = 0
-		d.aofSizeBaseline = 0
-		return nil
-	}
-
+func (d *db) serialize() ([]byte, error) {
 	now := time.Now().Unix()
 	var buf []byte
 
@@ -193,18 +184,88 @@ func (d *db) compact() error {
 
 		raw, err := json.Marshal(record)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		buf = append(buf, raw...)
 		buf = append(buf, '\n')
 	}
 
-	if err := utils.WriteFile(aofPath, buf, 0644); err != nil {
+	return buf, nil
+}
+
+func (d *db) compact() error {
+	if len(d.data) == 0 && !dirExists(d.dir) {
+		return nil
+	}
+
+	n := d.num
+	dst := snapPath(d.dir, n)
+	tmp := dst + ".tmp"
+
+	buf, err := d.serialize()
+	if err != nil {
 		return err
 	}
 
-	d.aofSize = int64(len(buf))
-	d.aofSizeBaseline = d.aofSize
+	if err := writeSync(tmp, buf); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+
+	if err := os.Rename(tmp, dst); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+
+	if err := syncDir(d.dir); err != nil {
+		return err
+	}
+
+	lg, err := os.OpenFile(logPath(d.dir, n+1), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	old := d.aof
+	d.aof = lg
+	d.num = n + 1
+	d.logSize = 0
+	d.snapSize = int64(len(buf))
+	if old != nil {
+		old.Close()
+	}
+
+	d.gen = bumpGen(d.dir)
+	go gcOlderThan(d.dir, n)
+
 	return nil
+}
+
+func writeSync(path string, buf []byte) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	if _, err := file.Write(buf); err != nil {
+		file.Close()
+		return err
+	}
+
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
+
+	return file.Close()
+}
+
+func syncDir(dir string) error {
+	file, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return file.Sync()
 }

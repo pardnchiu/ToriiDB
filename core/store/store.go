@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -17,14 +18,16 @@ const (
 )
 
 type db struct {
-	mu              sync.RWMutex
-	dir             string
-	data            map[string]*Entry
-	aof             *os.File
-	aofSize         int64
-	aofSizeBaseline int64
-	once            sync.Once
-	loaded          bool
+	mu       sync.RWMutex
+	dir      string
+	data     map[string]*Entry
+	aof      *os.File
+	num      int
+	logSize  int64
+	snapSize int64
+	gen      uint64
+	once     sync.Once
+	loaded   bool
 }
 
 type embedder struct {
@@ -131,14 +134,30 @@ func New(path ...string) (*Store, error) {
 
 func (d *db) ensureLoaded() {
 	d.once.Do(func() {
-		aofPath := filepath.Join(d.dir, "record.aof")
-		if data, size, err := replayAOF(aofPath); err == nil {
-			d.data = data
-			d.aofSize = size
-			d.aofSizeBaseline = size
-		}
+		d.loadAll()
 		d.loaded = true
 	})
+}
+
+func (d *db) loadAll() {
+	stale, _ := filepath.Glob(filepath.Join(d.dir, "*.tmp"))
+	for _, path := range stale {
+		slog.Warn("toriidb: removing stale temp file", slog.String("file", path))
+		os.Remove(path)
+	}
+
+	snap, n := latestSnap(d.dir)
+	if data, err := replayFile(snap); err == nil {
+		d.data = data
+	}
+	d.snapSize = sizeOf(snap)
+
+	log := logPath(d.dir, n+1)
+	replayInto(d.data, log)
+	d.logSize = sizeOf(log)
+
+	d.num = n + 1
+	d.gen = readGen(d.dir)
 }
 
 func (d *db) init() error {
@@ -150,10 +169,9 @@ func (d *db) init() error {
 		return fmt.Errorf("mkdir: %w", err)
 	}
 
-	aofPath := filepath.Join(d.dir, "record.aof")
-	file, err := os.OpenFile(aofPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(logPath(d.dir, d.num), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("open aof: %w", err)
+		return fmt.Errorf("open log: %w", err)
 	}
 
 	d.aof = file
@@ -180,6 +198,11 @@ func (s *Store) Close() error {
 			if err := d.compact(); err != nil {
 				errs <- err
 			}
+			if d.aof != nil {
+				d.aof.Close()
+				d.aof = nil
+			}
+			gcOlderThan(d.dir, d.num-1)
 		}(d)
 	}
 
