@@ -26,29 +26,6 @@ func TestEntry_Value(t *testing.T) {
 	}
 }
 
-func TestEntry_JSON(t *testing.T) {
-	s, err := store.New(tempDir(t))
-	if err != nil {
-		t.Fatalf("store.New: %v", err)
-	}
-	defer s.Close()
-
-	sess := s.Session()
-	sess.Exec("SET k1 hello")
-
-	entry, ok := sess.Get("k1")
-	if !ok {
-		t.Fatal("Get(k1) returned false")
-	}
-	data, err := entry.JSON()
-	if err != nil {
-		t.Fatalf("JSON: %v", err)
-	}
-	if len(data) == 0 {
-		t.Error("JSON returned empty")
-	}
-}
-
 func TestSession_Set(t *testing.T) {
 	s, err := store.New(tempDir(t))
 	if err != nil {

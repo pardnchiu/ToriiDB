@@ -3,6 +3,8 @@ package store
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"time"
 
@@ -82,7 +84,7 @@ func replayInto(data map[string]*Entry, path string) error {
 		var record AOFRecord
 		if len(line) == 0 || json.Unmarshal(line, &record) != nil {
 			if readErr != nil {
-				break
+				return eofOrErr(readErr)
 			}
 			continue
 		}
@@ -137,11 +139,16 @@ func replayInto(data map[string]*Entry, path string) error {
 		}
 
 		if readErr != nil {
-			break
+			return eofOrErr(readErr)
 		}
 	}
+}
 
-	return nil
+func eofOrErr(err error) error {
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
 }
 
 func (d *db) serialize() ([]byte, error) {
@@ -181,6 +188,10 @@ func (d *db) serialize() ([]byte, error) {
 }
 
 func (d *db) compact() error {
+	if d.loadErr != nil {
+		return d.loadErr
+	}
+
 	if len(d.data) == 0 && !go_pkg_filesystem_reader.IsDir(d.dir) {
 		return nil
 	}

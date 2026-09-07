@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"time"
 
-	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 	"github.com/pardnchiu/toriidb/core/utils"
 )
 
@@ -71,15 +70,6 @@ func (c *core) SetField(key string, subKeys []string, value string, flag SetFlag
 			return fmt.Errorf("entry.setParsed: %w", err)
 		}
 		db.data[key] = entry
-	}
-
-	entryRaw, err := entry.JSON()
-	if err != nil {
-		return fmt.Errorf("entry.JSON: %w", err)
-	}
-
-	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(entryRaw), 0644); err != nil {
-		return err
 	}
 
 	return db.addToAOF("SET", key, entry.Value(), expireAt)

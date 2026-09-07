@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -37,26 +38,23 @@ func parseName(name string) (int, string, bool) {
 	return num, kind, true
 }
 
-func latestSnap(dir string) (string, int) {
+func snapNumbers(dir string) []int {
 	entries, err := go_pkg_filesystem_reader.ListAll(dir)
 	if err != nil {
-		return "", 0
+		return nil
 	}
 
-	latest := -1
+	var nums []int
 	for _, e := range entries {
 		num, kind, ok := parseName(e.Name)
 		if !ok || kind != "snap" {
 			continue
 		}
-		latest = max(latest, num)
+		nums = append(nums, num)
 	}
 
-	if latest < 0 {
-		return "", 0
-	}
-
-	return snapPath(dir, latest), latest
+	sort.Sort(sort.Reverse(sort.IntSlice(nums)))
+	return nums
 }
 
 func gcOlderThan(dir string, keep int) {
@@ -73,11 +71,11 @@ func gcOlderThan(dir string, keep int) {
 
 		switch kind {
 		case "snap":
-			if num < keep {
+			if num < keep-1 {
 				go_pkg_filesystem.Remove(e.Path)
 			}
 		case "log":
-			if num <= keep {
+			if num <= keep-1 {
 				go_pkg_filesystem.Remove(e.Path)
 			}
 		}

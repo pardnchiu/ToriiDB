@@ -3,8 +3,6 @@ package store
 import (
 	"fmt"
 	"time"
-
-	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
 func (c *core) TTL(key string) int64 {
@@ -38,15 +36,6 @@ func (c *core) Expire(key string, seconds int64) error {
 	expireAt := time.Now().Unix() + seconds
 	e.ExpireAt = &expireAt
 
-	raw, err := e.JSON()
-	if err != nil {
-		return fmt.Errorf("entry.JSON: %w", err)
-	}
-
-	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
-		return err
-	}
-
 	return db.addToAOF("EXPIRE", key, fmt.Sprintf("%d", seconds), &expireAt)
 }
 
@@ -62,15 +51,6 @@ func (c *core) ExpireAt(key string, timestamp int64) error {
 
 	e.ExpireAt = &timestamp
 
-	raw, err := e.JSON()
-	if err != nil {
-		return fmt.Errorf("entry.JSON: %w", err)
-	}
-
-	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
-		return err
-	}
-
 	return db.addToAOF("EXPIREAT", key, fmt.Sprintf("%d", timestamp), &timestamp)
 }
 
@@ -85,15 +65,6 @@ func (c *core) Persist(key string) error {
 	}
 
 	e.ExpireAt = nil
-
-	raw, err := e.JSON()
-	if err != nil {
-		return fmt.Errorf("entry.JSON: %w", err)
-	}
-
-	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
-		return err
-	}
 
 	return db.addToAOF("PERSIST", key, "", nil)
 }
