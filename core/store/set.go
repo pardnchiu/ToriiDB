@@ -2,17 +2,13 @@ package store
 
 import (
 	"context"
-	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
 var ErrNoEmbedder = errors.New("no embedder: OPENAI_API_KEY not provided")
@@ -44,27 +40,6 @@ func (e *Entry) Value() string { return e.value }
 func (e *Entry) setValue(v string) {
 	e.value = v
 	e.parsed = nil
-}
-
-func (e *Entry) JSON() ([]byte, error) {
-	type data struct {
-		Key       string    `json:"key"`
-		Value     string    `json:"value"`
-		Type      ValueType `json:"type"`
-		CreatedAt int64     `json:"created_at"`
-		UpdatedAt *int64    `json:"updated_at,omitempty"`
-		ExpireAt  *int64    `json:"expire_at,omitempty"`
-		Vector    []float32 `json:"vector,omitempty"`
-	}
-	return json.Marshal(data{
-		Key:       e.Key,
-		Value:     e.value,
-		Type:      e.Type,
-		CreatedAt: e.CreatedAt,
-		UpdatedAt: e.UpdatedAt,
-		ExpireAt:  e.ExpireAt,
-		Vector:    e.Vector,
-	})
 }
 
 func (e *Entry) parseAndCache() (any, bool) {
@@ -150,15 +125,6 @@ func (c *core) Set(key, value string, flag SetFlag, expireAt *int64) error {
 		entry.parseAndCache()
 	}
 
-	raw, err := entry.JSON()
-	if err != nil {
-		return fmt.Errorf("entry.JSON: %w", err)
-	}
-
-	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
-		return err
-	}
-
 	return db.addToAOF("SET", key, value, expireAt)
 }
 
@@ -233,18 +199,7 @@ func (c *core) writeVectorToEntry(d *db, key, text string, vec []float32) {
 
 	entry.Vector = vec
 
-	raw, err := entry.JSON()
-	if err != nil {
-		return
-	}
-	_ = go_pkg_filesystem.WriteFile(d.filePath(key), string(raw), 0644)
 	_ = d.addToAOFWithVector("SET", key, entry.Value(), entry.ExpireAt, vec)
-}
-
-// * use redis-fallback 3 layers store
-func (d *db) filePath(key string) string {
-	h := fmt.Sprintf("%x", md5.Sum([]byte(key)))
-	return filepath.Join(d.dir, h[0:2], h[2:4], h[4:6], h+".json")
 }
 
 func detectType(value string) ValueType {

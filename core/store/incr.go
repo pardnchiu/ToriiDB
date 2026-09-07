@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"time"
 
-	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 	"github.com/pardnchiu/toriidb/core/utils"
 )
 
@@ -35,15 +34,6 @@ func (c *core) Incr(key string, delta float64) (float64, error) {
 	entry.setValue(utils.Vtoa(result))
 	entry.Type = detectType(entry.Value())
 	entry.UpdatedAt = &now
-
-	raw, err := entry.JSON()
-	if err != nil {
-		return 0, fmt.Errorf("entry.JSON: %w", err)
-	}
-
-	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(raw), 0644); err != nil {
-		return 0, err
-	}
 
 	if err := db.addToAOF("SET", key, entry.Value(), entry.ExpireAt); err != nil {
 		return 0, err

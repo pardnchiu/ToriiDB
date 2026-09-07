@@ -10,6 +10,7 @@ import (
 	"time"
 
 	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
+	go_pkg_filesystem_reader "github.com/pardnchiu/go-pkg/filesystem/reader"
 	"github.com/pardnchiu/toriidb/core/openai"
 )
 
@@ -24,6 +25,7 @@ type db struct {
 	data     map[string]*Entry
 	aof      *os.File
 	num      int
+	loadErr  error
 	logSize  int64
 	snapSize int64
 	once     sync.Once
@@ -143,18 +145,51 @@ func (d *db) loadAll() {
 		go_pkg_filesystem.Remove(path)
 	}
 
-	snap, n := latestSnap(d.dir)
-	data := make(map[string]*Entry)
-	if replayInto(data, snap) == nil {
-		d.data = data
+	nums := snapNumbers(d.dir)
+	if len(nums) == 0 {
+		nums = []int{0}
 	}
-	d.snapSize = sizeOf(snap)
 
-	log := logPath(d.dir, n+1)
-	replayInto(d.data, log)
-	d.logSize = sizeOf(log)
+	for _, n := range nums {
+		if d.replayGeneration(n) {
+			return
+		}
+	}
+}
 
-	d.num = n + 1
+// * n = 0 代表沒有 snapshot（全新 db），只重播 log
+func (d *db) replayGeneration(n int) bool {
+	data := make(map[string]*Entry)
+
+	if n > 0 {
+		snap := snapPath(d.dir, n)
+		if err := replayInto(data, snap); err != nil {
+			d.loadErr = fmt.Errorf("replay %s: %w", snap, err)
+			return false
+		}
+		d.snapSize = sizeOf(snap)
+	}
+
+	logSize := int64(0)
+	num := n + 1
+	for {
+		log := logPath(d.dir, num)
+		if !go_pkg_filesystem_reader.Exists(log) {
+			break
+		}
+		if err := replayInto(data, log); err != nil {
+			d.loadErr = fmt.Errorf("replay %s: %w", log, err)
+			return false
+		}
+		logSize = sizeOf(log)
+		num++
+	}
+
+	d.loadErr = nil
+	d.data = data
+	d.logSize = logSize
+	d.num = max(num-1, n+1)
+	return true
 }
 
 func (d *db) init() error {
@@ -199,12 +234,13 @@ func (s *Store) closeAll() error {
 			defer d.mu.Unlock()
 			if err := d.compact(); err != nil {
 				errs <- err
+			} else {
+				gcOlderThan(d.dir, d.num-1)
 			}
 			if d.aof != nil {
 				d.aof.Close()
 				d.aof = nil
 			}
-			gcOlderThan(d.dir, d.num-1)
 		}(d)
 	}
 
@@ -256,7 +292,6 @@ func (d *db) cleanExpired() {
 	for key, e := range d.data {
 		if e.ExpireAt != nil && *e.ExpireAt <= now {
 			delete(d.data, key)
-			go_pkg_filesystem.Remove(d.filePath(key))
 		}
 	}
 }

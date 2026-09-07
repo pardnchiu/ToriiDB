@@ -3,8 +3,6 @@ package store
 import (
 	"fmt"
 	"time"
-
-	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
 func (c *core) Del(keys ...string) int {
@@ -19,7 +17,6 @@ func (c *core) Del(keys ...string) int {
 		}
 
 		delete(db.data, key)
-		go_pkg_filesystem.Remove(db.filePath(key))
 		db.addToAOF("DEL", key, "", nil)
 		count++
 	}
@@ -59,15 +56,6 @@ func (c *core) DelField(key string, subKeys []string) error {
 
 	now := time.Now().Unix()
 	entry.UpdatedAt = &now
-
-	entryRaw, err := entry.JSON()
-	if err != nil {
-		return fmt.Errorf("entry.JSON: %w", err)
-	}
-
-	if err := go_pkg_filesystem.WriteFile(db.filePath(key), string(entryRaw), 0644); err != nil {
-		return err
-	}
 
 	return db.addToAOF("SET", key, entry.Value(), entry.ExpireAt)
 }

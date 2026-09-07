@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
-	go_pkg_filesystem "github.com/pardnchiu/go-pkg/filesystem"
 )
 
 type embedPayload struct {
@@ -73,14 +71,6 @@ func (d *db) putVector(model string, dim int, text string, vec []float32) error 
 		entry.setValue(value)
 		entry.parseAndCache()
 		d.data[key] = entry
-	}
-
-	raw, err := d.data[key].JSON()
-	if err != nil {
-		return fmt.Errorf("d.data[key].JSON: %w", err)
-	}
-	if err := go_pkg_filesystem.WriteFile(d.filePath(key), string(raw), 0644); err != nil {
-		return err
 	}
 
 	return d.addToAOF("SET", key, value, nil)
