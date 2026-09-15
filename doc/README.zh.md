@@ -4,7 +4,7 @@
 ***
 
 <p align="center">
-<strong>EMBEDDED JSON KV STORAGE WITH REDIS-LIKE COMMANDS AND VECTOR SEARCH</strong>
+<strong>EMBEDDED JSON KV STORAGE WITH A SHARED SOCKET DAEMON AND VECTOR SEARCH</strong>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 
 ***
 
-> Go 內嵌式資料庫，具備 Redis 風格指令、JSON 文件操作與語意向量搜尋
+> Go 內嵌式資料庫，具備共用 socket daemon、JSON 欄位操作與語意向量搜尋
 
 ## 目錄
 
@@ -29,11 +29,11 @@
 
 > `go get github.com/pardnchiu/toriidb` · [完整文件](./doc.zh.md)
 
-- **Redis 風格操作** — 透過單一指令路由器提供熟悉的 REPL 工作流程，也能直接使用 Go API 嵌入應用程式。
-- **JSON 欄位增修** — 使用點記法讀取、更新、遞增或刪除巢狀欄位，無需重寫整份文件。
-- **分層本地持久化** — 以記憶體維持低延遲，並透過 AOF 與逐鍵 JSON 檔案保存每次寫入。
-- **內建向量搜尋** — 為鍵值附加 embedding，支援 Top-K 語意搜尋、樣式過濾與餘弦相似度比較。
-- **多資料庫並行隔離** — 提供 16 個各自具備鎖與延遲載入生命週期的獨立資料庫空間。
+- **一個目錄一個 Daemon** — 第一個對資料目錄呼叫 `daemon.New` 的 process 提供 unix socket，其後的呼叫端自動成為 client，並使用同一組 Get／Set／Del 方法。
+- **當機安全的 Snapshot 持久化** — 每筆寫入都 fsync 到附加 log，壓縮時以原子方式換上新 snapshot，並保留前一世代供重播退回。
+- **JSON 欄位增修** — 以點記法讀取、設定、遞增與刪除巢狀欄位，並用 AND／OR／NOT 運算式篩選文件。
+- **內建向量搜尋** — 在背景附加 OpenAI embedding、重用快取向量，並依餘弦相似度搭配 glob 篩選排序鍵。
+- **Redis 風格指令路由** — 17 個指令橫跨 16 個隔離資料庫並支援 TTL 過期，可從 REPL 或 Go API 使用。
 
 ## 架構
 
@@ -41,14 +41,15 @@
 
 ```mermaid
 graph TB
-    A[REPL 或 Go API] --> B[Store 與 Session]
-    B --> C[指令與 API 操作]
-    C --> D[鍵值與 JSON 引擎]
-    C --> E[向量搜尋引擎]
-    D --> F[16 個記憶體資料庫]
-    E --> F
-    F --> G[AOF 與 JSON 檔案]
-    E --> H[OpenAI Embedding]
+    APP[Go 應用程式] --> NEW[daemon.New]
+    NEW -->|socket 存活| CLI[Unix Socket Client]
+    NEW -->|第一個呼叫端| SRV[Socket Server 與 Store]
+    CLI --> SRV
+    REPL[REPL] --> OPS[指令與 API 操作]
+    SRV --> OPS
+    OPS --> DBS[16 個記憶體資料庫]
+    DBS --> DISK[Snapshot 與附加 Log]
+    OPS --> EMB[OpenAI Embedding]
 ```
 
 ## 授權
@@ -57,12 +58,11 @@ graph TB
 
 ## Author
 
-<img src="https://github.com/pardnchiu.png" align="left" width="96" height="96" style="margin-right: 0.5rem;">
+Just [open an issue](https://github.com/pardnchiu/toriidb/issues/new) to share an idea.
 
-<h4 style="padding-top: 0">邱敬幃 Pardn Chiu</h4>
-
-<a href="mailto:hi@pardn.io">hi@pardn.io</a><br>
-<a href="https://www.linkedin.com/in/pardnchiu">https://www.linkedin.com/in/pardnchiu</a>
+<a href="https://github.com/pardnchiu/toriidb/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=pardnchiu/toriidb&cache_bust=2026-09-16" alt="toriidb contributors" />
+</a>
 
 ***
 

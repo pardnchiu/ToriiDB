@@ -4,7 +4,7 @@
 ***
 
 <p align="center">
-<strong>EMBEDDED JSON KV STORAGE WITH REDIS-LIKE COMMANDS AND VECTOR SEARCH</strong>
+<strong>EMBEDDED JSON KV STORAGE WITH A SHARED SOCKET DAEMON AND VECTOR SEARCH</strong>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 
 ***
 
-> A Go embedded database with Redis-like commands, JSON document operations, and semantic vector search
+> A Go embedded database with a shared socket daemon, JSON field operations, and semantic vector search
 
 ## Table of Contents
 
@@ -29,11 +29,11 @@
 
 > `go get github.com/pardnchiu/toriidb` · [Documentation](./doc/doc.md)
 
-- **Redis-Like Operations** — Use a familiar REPL through one command router or embed the same database directly through its Go API.
-- **JSON Field Mutation** — Read, update, increment, and delete nested fields with dot notation instead of rewriting complete documents.
-- **Layered Local Persistence** — Keep low-latency state in memory while preserving writes through AOF records and per-key JSON files.
-- **Built-In Vector Search** — Attach embeddings to values and run top-K semantic search, pattern filtering, and cosine similarity queries.
-- **Isolated Multi-Database State** — Work across 16 independently locked databases with lazy loading and session-scoped selection.
+- **One Daemon Per Directory** — The first process to call `daemon.New` on a data directory serves a unix socket, and every later caller becomes a client using the same Get/Set/Del methods.
+- **Crash-Safe Snapshot Persistence** — Every write is fsynced to an append log, and compaction atomically swaps in a new snapshot while keeping the previous generation for fallback replay.
+- **JSON Field Mutation** — Read, set, increment, and delete nested fields with dot notation, and filter documents with AND/OR/NOT query expressions.
+- **Built-In Vector Search** — Attach OpenAI embeddings in the background, reuse cached vectors, and rank keys by cosine similarity with glob filters.
+- **Redis-Style Command Router** — Run 17 commands across 16 isolated databases with TTL expiry, from the REPL or the Go API.
 
 ## Architecture
 
@@ -41,14 +41,15 @@
 
 ```mermaid
 graph TB
-    A[REPL or Go API] --> B[Store and Sessions]
-    B --> C[Command and API Operations]
-    C --> D[KV and JSON Engine]
-    C --> E[Vector Search Engine]
-    D --> F[16 In-Memory Databases]
-    E --> F
-    F --> G[AOF and JSON Files]
-    E --> H[OpenAI Embeddings]
+    APP[Go Application] --> NEW[daemon.New]
+    NEW -->|socket is live| CLI[Unix Socket Client]
+    NEW -->|first caller| SRV[Socket Server and Store]
+    CLI --> SRV
+    REPL[REPL] --> OPS[Command and API Operations]
+    SRV --> OPS
+    OPS --> DBS[16 In-Memory Databases]
+    DBS --> DISK[Snapshot and Append Log]
+    OPS --> EMB[OpenAI Embeddings]
 ```
 
 ## License
@@ -57,12 +58,11 @@ This project is licensed under the [MIT LICENSE](LICENSE).
 
 ## Author
 
-<img src="https://github.com/pardnchiu.png" align="left" width="96" height="96" style="margin-right: 0.5rem;">
+Just [open an issue](https://github.com/pardnchiu/toriidb/issues/new) to share an idea.
 
-<h4 style="padding-top: 0">邱敬幃 Pardn Chiu</h4>
-
-<a href="mailto:hi@pardn.io">hi@pardn.io</a><br>
-<a href="https://www.linkedin.com/in/pardnchiu">https://www.linkedin.com/in/pardnchiu</a>
+<a href="https://github.com/pardnchiu/toriidb/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=pardnchiu/toriidb&cache_bust=2026-09-16" alt="toriidb contributors" />
+</a>
 
 ***
 
