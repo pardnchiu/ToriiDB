@@ -1,5 +1,7 @@
 # toriidb - 技術文件
 
+最後更新：2026-09-16
+
 > 返回 [README](./README.zh.md)
 
 ## 前置需求

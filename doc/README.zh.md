@@ -1,3 +1,5 @@
+最後更新：2026-10-06
+
 > [!NOTE]
 > 此 README 由 [SKILL](https://github.com/agenvoy/skill-readme-generate) 生成，英文版請參閱 [這裡](../README.md)。
 
@@ -11,12 +13,11 @@
 <a href="https://pkg.go.dev/github.com/pardnchiu/toriidb"><img src="https://img.shields.io/badge/GO-REFERENCE-blue?include_prereleases&style=for-the-badge" alt="Go Reference"></a>
 <a href="https://github.com/pardnchiu/toriidb/releases"><img src="https://img.shields.io/github/v/tag/pardnchiu/toriidb?include_prereleases&style=for-the-badge" alt="Release"></a>
 <a href="../LICENSE"><img src="https://img.shields.io/github/license/pardnchiu/toriidb?include_prereleases&style=for-the-badge" alt="License"></a>
-<a href="https://app.codecov.io/github/pardnchiu/toriidb/tree/develop"><img src="https://img.shields.io/codecov/c/github/pardnchiu/toriidb/develop?include_prereleases&style=for-the-badge" alt="Coverage"></a>
 </p>
 
 ***
 
-> Go 內嵌式資料庫，具備共用 socket daemon、JSON 欄位操作與語意向量搜尋
+> Go 內嵌式鍵值資料庫，具備 Redis 風格指令、共用 socket daemon 與向量搜尋
 
 ## 目錄
 
@@ -61,7 +62,7 @@ graph TB
 Just [open an issue](https://github.com/pardnchiu/toriidb/issues/new) to share an idea.
 
 <a href="https://github.com/pardnchiu/toriidb/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=pardnchiu/toriidb&cache_bust=2026-09-16" alt="toriidb contributors" />
+  <img src="https://contrib.rocks/image?repo=pardnchiu/toriidb&cache_bust=2026-10-06" alt="toriidb contributors" />
 </a>
 
 ***
